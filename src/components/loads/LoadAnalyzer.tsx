@@ -18,8 +18,8 @@ import type { FinancialReport, Verdict } from '@/types';
 const DEFAULTS = {
   origin: '', destination: '', brokerName: '',
   grossPay: '3200', loadedMiles: '850', deadheadMiles: '45',
-  fuelCost: '680', tollCost: '0', driverPay: '0', maintCost: '80',
-  factoringRate: '0.03', currentDieselPrice: '3.89',
+  fuelCost: '', tollCost: '0', driverPay: '0', maintCost: '',
+  factoringRate: '0.03', currentDieselPrice: '3.50',
 };
 
 const VERDICT_CONFIG: Record<Verdict, {
@@ -82,10 +82,10 @@ export function LoadAnalyzer() {
         gross_pay: report.grossPay,
         loaded_miles: report.loadedMiles,
         deadhead_miles: report.deadheadMiles,
-        fuel_cost: Number(form.fuelCost) || 0,
+        fuel_cost: report.fuelCost,
         toll_cost: Number(form.tollCost) || 0,
         driver_pay: Number(form.driverPay) || 0,
-        maint_cost: Number(form.maintCost) || 0,
+        maint_cost: report.maintCost,
         net_profit: report.netProfit,
         net_margin_pct: report.netMarginPct,
         logimargin_score: report.logimarginScore,
@@ -290,6 +290,7 @@ export function LoadAnalyzer() {
                   {[
                     { label: 'Gross Pay',   val: fmt.currency(report.grossPay),    hl: '' },
                     { label: 'Toplam Maliyet', val: fmt.currency(report.totalCost), hl: '' },
+                    { label: 'Sabit Maliyet', val: fmt.currency(report.fixedCost), hl: '' },
                     { label: 'Net Kar',     val: fmt.currency(report.netProfit),   hl: report.netProfit > 0 ? 'profit' : 'danger' },
                     { label: 'Net Margin',  val: fmt.percent(report.netMarginPct), hl: report.netMarginPct >= 0.20 ? 'profit' : report.netMarginPct >= 0.15 ? 'warning' : 'danger' },
                     { label: 'Gross RPM',   val: fmt.rpm(report.rpmGross),         hl: '' },

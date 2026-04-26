@@ -4,6 +4,7 @@
 // ============================================================
 import { NextRequest, NextResponse } from 'next/server';
 import { createServerClient } from '@/lib/supabase';
+import { analyzeTrip } from '@/lib/logimargin-engine';
 
 export const runtime = 'nodejs';
 
@@ -66,14 +67,22 @@ export async function POST(req: NextRequest) {
     const brokerName = overrides?.brokerName ?? (ai.brokerName as string) ?? null;
     const pickupDate = overrides?.pickupDate ?? (ai.pickupDate as string) ?? null;
     const deliveryDate = overrides?.deliveryDate ?? (ai.deliveryDate as string) ?? null;
-    const fuelCost = overrides?.fuelCost ?? 0;
+    const deadheadMiles = 0;
+    const analysis = analyzeTrip({
+      grossPay,
+      loadedMiles,
+      deadheadMiles,
+      fuelCost: overrides?.fuelCost,
+      tollCost: overrides?.tollCost,
+      driverPay: overrides?.driverPay,
+      maintCost: overrides?.maintCost,
+    });
+    const fuelCost = analysis.fuelCost;
     const tollCost = overrides?.tollCost ?? 0;
     const driverPay = overrides?.driverPay ?? 0;
-    const maintCost = overrides?.maintCost ?? 0;
-
-    const totalCost = fuelCost + tollCost + driverPay + maintCost;
-    const netProfit = grossPay - totalCost;
-    const netMarginPct = grossPay > 0 ? netProfit / grossPay : 0;
+    const maintCost = analysis.maintCost;
+    const netProfit = analysis.netProfit;
+    const netMarginPct = analysis.netMarginPct;
 
     // ── 4. Insert into trips ──────────────────────────────────
     const { data: trip, error: tripErr } = await db
@@ -85,13 +94,16 @@ export async function POST(req: NextRequest) {
         equipment_type: equipmentType,
         gross_pay: grossPay,
         loaded_miles: loadedMiles,
-        deadhead_miles: 0,
+        deadhead_miles: deadheadMiles,
         fuel_cost: fuelCost,
         toll_cost: tollCost,
         driver_pay: driverPay,
         maint_cost: maintCost,
         net_profit: netProfit,
         net_margin_pct: netMarginPct,
+        logimargin_score: analysis.logimarginScore,
+        verdict: analysis.verdict,
+        action: analysis.action,
         status: 'booked',
         broker_name: brokerName,
         pickup_date: pickupDate,
