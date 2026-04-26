@@ -6,6 +6,24 @@ import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { supabase } from '@/lib/supabase';
 import type { TripRow, InvoiceRow, InvoiceStatus } from '@/types';
 
+type InvoiceQueryRow = {
+  id: string;
+  invoice_number: string;
+  invoice_amount: number;
+  advance_amount: number | null;
+  status: string;
+  has_ai_errors: boolean;
+  ai_error_amount: number | null;
+  paid_at: string | null;
+  payment_days: number | null;
+  trips: { origin: string; destination: string } | { origin: string; destination: string }[] | null;
+};
+
+function invoiceTripRoute(trips: InvoiceQueryRow['trips']) {
+  const trip = Array.isArray(trips) ? trips[0] : trips;
+  return trip ? `${trip.origin} → ${trip.destination}` : 'No trip linked';
+}
+
 // ── useTrips ──────────────────────────────────────────────────
 export function useTrips() {
   return useQuery({
@@ -75,10 +93,10 @@ export function useInvoices() {
         .order('created_at', { ascending: false })
         .limit(50);
       if (error) throw new Error(error.message);
-      return (data ?? []).map((r: any) => ({
+      return ((data ?? []) as InvoiceQueryRow[]).map(r => ({
         id: r.id,
         invoiceNumber: r.invoice_number,
-        tripRoute: r.trips ? `${r.trips.origin} → ${r.trips.destination}` : 'No trip linked',
+        tripRoute: invoiceTripRoute(r.trips),
         invoiceAmount: r.invoice_amount,
         advanceAmount: r.advance_amount,
         status: r.status as InvoiceStatus,
