@@ -16,6 +16,14 @@ import { supabase } from '@/lib/supabase';
 import { calcDetention } from '@/lib/logimargin-engine';
 import type { DetentionResult } from '@/types';
 
+type DetentionHistoryRow = {
+  id: string;
+  facility_name: string | null;
+  created_at: string;
+  billable_amount: number | null;
+  billable_minutes: number | null;
+};
+
 export function DetentionTimer() {
   const qc = useQueryClient();
   const [facilityName, setFacilityName] = useState('');
@@ -37,7 +45,7 @@ export function DetentionTimer() {
   }, [entryTime, stopped]);
 
   // Load detention history
-  const { data: history } = useQuery({
+  const { data: history } = useQuery<DetentionHistoryRow[]>({
     queryKey: ['detention-history'],
     queryFn: async () => {
       const { data } = await supabase
@@ -296,15 +304,15 @@ Saygılarımızla` : '';
           </CardHeader>
           <Separator />
           <CardContent className="pt-3 space-y-2">
-            {history.map((rec: any) => (
+            {history.map(rec => (
               <div key={rec.id} className="flex items-center justify-between gap-3 px-1 py-2 border-b border-border/30 last:border-0">
                 <div className="min-w-0">
                   <p className="text-sm font-medium truncate">{rec.facility_name || '—'}</p>
                   <p className="text-xs text-muted-foreground">{new Date(rec.created_at).toLocaleDateString('tr-TR')}</p>
                 </div>
                 <div className="text-right shrink-0">
-                  <p className="font-mono text-sm font-bold text-danger">{fmt.currency(rec.billable_amount, 0)}</p>
-                  <p className="text-[10px] text-muted-foreground">{rec.billable_minutes} dk</p>
+                  <p className="font-mono text-sm font-bold text-danger">{fmt.currency(rec.billable_amount ?? 0, 0)}</p>
+                  <p className="text-[10px] text-muted-foreground">{rec.billable_minutes ?? 0} dk</p>
                 </div>
               </div>
             ))}

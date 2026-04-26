@@ -16,6 +16,17 @@ import { supabase } from '@/lib/supabase';
 import { detectMaintenanceAlerts } from '@/lib/logimargin-engine';
 import type { VehicleVitals, MaintenanceAlert } from '@/types';
 
+type VehicleVitalsRow = {
+  current_odometer: number | null;
+  engine_hours: number | null;
+  last_oil_change_mi: number | null;
+  last_tire_rotate_mi: number | null;
+  last_injector_svc_mi: number | null;
+  last_def_fluid_mi: number | null;
+  baseline_cpm: number | null;
+  recorded_at: string;
+};
+
 const DEFAULTS = {
   currentOdometer: 487_500, engineHours: 14_200,
   lastOilChangeMi: 475_000, lastTireRotateMi: 462_000,
@@ -64,7 +75,7 @@ export function MaintenancePredictor() {
   const [saved, setSaved] = useState(false);
 
   // Load latest saved vitals
-  const { data: latestVitals } = useQuery({
+  const { data: latestVitals } = useQuery<VehicleVitalsRow[]>({
     queryKey: ['vehicle-vitals-detail'],
     queryFn: async () => {
       const { data } = await supabase
@@ -72,7 +83,7 @@ export function MaintenancePredictor() {
         .select('*')
         .order('recorded_at', { ascending: false })
         .limit(10);
-      return data ?? [];
+      return (data ?? []) as VehicleVitalsRow[];
     },
   });
 
@@ -146,7 +157,7 @@ export function MaintenancePredictor() {
       <div className="flex items-center justify-between">
         <div>
           <h1 className="text-xl font-bold flex items-center gap-2">
-            <Wrench className="h-5 w-5 text-warning" /> Mechanic's Eye
+            <Wrench className="h-5 w-5 text-warning" /> Mechanic&apos;s Eye
           </h1>
           <p className="text-sm text-muted-foreground mt-0.5">
             Tahmine dayalı bakım uyarıları ve servis takibi.
@@ -277,12 +288,12 @@ export function MaintenancePredictor() {
           </CardHeader>
           <Separator />
           <CardContent className="pt-3 space-y-2">
-            {latestVitals.slice(0, 5).map((v: any, i: number) => (
+            {latestVitals.slice(0, 5).map((v, i) => (
               <div key={i} className="flex items-center justify-between text-sm px-1 py-1.5 border-b border-border/30 last:border-0">
                 <span className="text-muted-foreground text-xs">
                   {new Date(v.recorded_at).toLocaleDateString('tr-TR')}
                 </span>
-                <span className="font-mono font-semibold">{fmt.miles(v.current_odometer)}</span>
+                <span className="font-mono font-semibold">{fmt.miles(v.current_odometer ?? 0)}</span>
                 <span className="text-xs text-muted-foreground">CPM: ${v.baseline_cpm?.toFixed(2) ?? '—'}</span>
               </div>
             ))}

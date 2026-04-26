@@ -4,11 +4,10 @@ import { useRouter } from 'next/navigation';
 import {
   TrendingUp, TrendingDown, DollarSign, Truck, AlertTriangle,
   Activity, FileText, Plus, Upload, Timer, Star, ArrowRight,
-  CheckCircle2, Clock,
 } from 'lucide-react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
-import { Badge } from '@/components/ui/badge';
+import { Badge, type BadgeProps } from '@/components/ui/badge';
 import { Progress } from '@/components/ui/progress';
 import { Separator } from '@/components/ui/separator';
 import { cn, fmt } from '@/lib/utils';
@@ -56,7 +55,7 @@ const VERDICT_COLORS = {
   green:  { badge: 'profit',   label: 'GO',        dot: 'bg-profit'  },
   yellow: { badge: 'warning',  label: 'NEGOTIATE', dot: 'bg-warning' },
   red:    { badge: 'danger',   label: 'NO-GO',     dot: 'bg-danger'  },
-};
+} satisfies Record<string, { badge: BadgeProps['variant']; label: string; dot: string }>;
 
 const STATUS_LABELS: Record<string, string> = {
   booked: 'Booked', in_transit: 'In Transit', delivered: 'Delivered',
@@ -244,7 +243,7 @@ export function DashboardView() {
                       )}
                     </div>
                     {vc && (
-                      <Badge variant={vc.badge as any} className="text-[10px] shrink-0">{vc.label}</Badge>
+                      <Badge variant={vc.badge} className="text-[10px] shrink-0">{vc.label}</Badge>
                     )}
                   </div>
                 );

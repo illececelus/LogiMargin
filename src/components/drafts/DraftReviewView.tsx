@@ -7,17 +7,16 @@
 import { useState, useEffect, useCallback } from 'react';
 import { useRouter } from 'next/navigation';
 import {
-  CheckCircle2, AlertTriangle, Loader2, FileText,
-  Zap, TrendingUp, TrendingDown, Minus, DollarSign,
-  MapPin, Truck, Calendar, Shield, ShieldAlert, ChevronDown, ChevronUp,
+  CheckCircle2, AlertTriangle, Loader2,
+  Zap, TrendingDown,
+  Shield, ShieldAlert, ChevronDown, ChevronUp,
 } from 'lucide-react';
 import { Card, CardContent } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
-import { Separator } from '@/components/ui/separator';
 import { cn } from '@/lib/utils';
 import { supabase } from '@/lib/supabase';
-import type { EnrichedDraft } from '@/lib/logimargin-engine';
+import type { BrokerRiskResult, EnrichedDraft } from '@/lib/logimargin-engine';
 
 // ── Magic Loading Messages ────────────────────────────────────
 const LOADING_STEPS = [
@@ -92,7 +91,7 @@ function VerdictBanner({ verdict, aiAction, realProfit, realMarginPct }: {
 }
 
 // ── Broker Risk Banner ────────────────────────────────────────
-function BrokerRiskBanner({ brokerRisk }: { brokerRisk: any }) {
+function BrokerRiskBanner({ brokerRisk }: { brokerRisk: BrokerRiskResult | null }) {
   if (!brokerRisk || !brokerRisk.brokerName) return null;
   const isHighRisk = brokerRisk.isHighRisk;
   const grade = brokerRisk.grade;
@@ -277,9 +276,6 @@ export function DraftReviewView({ draftId }: { draftId: string }) {
   );
 
   if (!data) return null;
-
-  const fmt = (n: number | null | undefined, prefix = '$') =>
-    n != null ? `${prefix}${n.toLocaleString('en-US', { minimumFractionDigits: 0, maximumFractionDigits: 0 })}` : '—';
 
   return (
     <div className="space-y-5 pb-32 animate-slide-up max-w-xl mx-auto">

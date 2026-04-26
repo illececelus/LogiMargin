@@ -264,7 +264,7 @@ export function LoadAnalyzer() {
                     {/* Save button */}
                     {saved ? (
                       <div className="flex items-center gap-2 text-sm text-profit font-semibold">
-                        <CheckCircle2 className="h-4 w-4" /> Yük Active Loads'a kaydedildi!
+                        <CheckCircle2 className="h-4 w-4" /> Yük Active Loads&apos;a kaydedildi!
                       </div>
                     ) : (
                       <div className="flex items-center gap-3">
