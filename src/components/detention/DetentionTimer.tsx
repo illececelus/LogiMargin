@@ -28,7 +28,7 @@ export function DetentionTimer() {
   const qc = useQueryClient();
   const [facilityName, setFacilityName] = useState('');
   const [brokerName, setBrokerName]     = useState('');
-  const [ratePerHour, setRatePerHour]   = useState(50);
+  const [ratePerHour, setRatePerHour]   = useState('50');
   const [entryTime, setEntryTime]       = useState<Date | null>(null);
   const [now, setNow]                   = useState(new Date());
   const [result, setResult]             = useState<DetentionResult | null>(null);
@@ -36,6 +36,8 @@ export function DetentionTimer() {
   const [showEmail, setShowEmail]       = useState(false);
   const [saved, setSaved]               = useState(false);
   const intervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
+  const parsedRate = Number(ratePerHour);
+  const detentionRate = Number.isFinite(parsedRate) && parsedRate > 0 ? parsedRate : 50;
 
   useEffect(() => {
     if (entryTime && !stopped) {
@@ -74,7 +76,7 @@ export function DetentionTimer() {
         detention_minutes: result.detentionMinutes,
         billable_minutes: result.billableMinutes,
         billable_amount: result.billableAmount,
-        rate_per_hour: ratePerHour,
+        rate_per_hour: detentionRate,
       });
       if (error) {
         // Table may not exist yet — silently succeed
@@ -98,12 +100,12 @@ export function DetentionTimer() {
     if (intervalRef.current) clearInterval(intervalRef.current);
     setResult(calcDetention({
       entryTimestamp: entryTime, exitTimestamp: new Date(),
-      facilityName: facilityName || undefined, detentionRatePerHour: ratePerHour,
+      facilityName: facilityName || undefined, detentionRatePerHour: detentionRate,
     }));
   }
 
   const liveResult = entryTime && !stopped
-    ? calcDetention({ entryTimestamp: entryTime, facilityName: facilityName || undefined, detentionRatePerHour: ratePerHour })
+    ? calcDetention({ entryTimestamp: entryTime, facilityName: facilityName || undefined, detentionRatePerHour: detentionRate })
     : null;
   const display = result ?? liveResult;
 
@@ -124,7 +126,7 @@ ${new Date().toLocaleDateString('tr-TR')} tarihinde ${facilityName || 'belirtile
 • Çıkış Saati: ${result.claimData.exitTime}
 • Toplam Bekleme: ${result.claimData.detentionHours} saat
 • Ücretsiz Süre (2 saat) sonrası faturalanabilir: ${result.claimData.billableHours} saat
-• Saatlik Detention Ücreti: ${fmt.currency(ratePerHour)}/saat
+• Saatlik Detention Ücreti: ${fmt.currency(detentionRate)}/saat
 • TOPLAM TALEP: ${fmt.currency(result.claimData.totalClaim)}
 
 ${result.claimData.legalStatement}
@@ -167,7 +169,9 @@ Saygılarımızla` : '';
             <div className="space-y-1.5">
               <Label htmlFor="rate">Detention Ücreti ($/saat)</Label>
               <Input id="rate" type="number" value={ratePerHour}
-                onChange={e => setRatePerHour(Number(e.target.value))}
+                min="0"
+                step="1"
+                onChange={e => setRatePerHour(e.target.value)}
                 className="font-mono" disabled={!!entryTime && !stopped}
               />
             </div>
