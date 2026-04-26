@@ -7,9 +7,10 @@ import type {
   Verdict,
 } from '@/types';
 
-const DIESEL_PRICE_PER_GALLON = 3.89;
+const DIESEL_PRICE_PER_GALLON = 3.5;
 const MPG = 6.5;
-const MAINTENANCE_CPM = 0.18;
+const MAINTENANCE_CPM = 0.15;
+const FIXED_TRIP_EXPENSE = 200;
 const DEFAULT_FACTORING_RATE = 0.03;
 const IFTA_TAX_PER_GALLON = 0.20;
 const ESTIMATED_TEXAS_MILE_SHARE = 0.6;
@@ -136,7 +137,7 @@ export function calcRealProfit(input: RealProfitInput): RealProfitResult {
   const estimatedMaintCost = input.maintCost ?? totalMiles * MAINTENANCE_CPM;
   const estimatedFactoringCost = grossPay * factoringRate;
   const estimatedIftaTax = (loadedMiles / MPG) * IFTA_TAX_PER_GALLON * ESTIMATED_TEXAS_MILE_SHARE;
-  const totalEstimatedCost = estimatedFuelCost + estimatedMaintCost + estimatedFactoringCost + estimatedIftaTax;
+  const totalEstimatedCost = estimatedFuelCost + estimatedMaintCost + estimatedFactoringCost + estimatedIftaTax + FIXED_TRIP_EXPENSE;
   const realProfit = grossPay - totalEstimatedCost;
   const realMarginPct = grossPay > 0 ? (realProfit / grossPay) * 100 : 0;
   const rpmGross = grossPay / totalMiles;
@@ -177,10 +178,12 @@ export function evaluateBrokerRisk(row: BrokerDbRow | null, brokerName: string):
   const avgPaymentDays = row.avg_payment_days ?? row.avg_days_to_pay ?? row.days_to_pay_avg ?? null;
   const disputeRate = row.dispute_rate ?? ((row.dispute_count ?? 0) > 0 ? Math.min(1, (row.dispute_count ?? 0) / 10) : 0);
   const grade = row.grade ?? row.rating ?? scoreToGrade(score);
+  const isFailingCreditGrade = grade?.toUpperCase() === 'F';
   const isSlowPay = avgPaymentDays !== null && avgPaymentDays > 45;
   const isHighDispute = disputeRate >= 0.15;
-  const isHighRisk = Boolean(row.is_blacklisted) || score < 45 || isSlowPay || isHighDispute;
-  const riskReason = row.blacklist_reason
+  const isHighRisk = Boolean(row.is_blacklisted) || isFailingCreditGrade || score < 45 || isSlowPay || isHighDispute;
+  const riskReason = (isFailingCreditGrade ? 'Kötü kredi skoru' : null)
+    ?? row.blacklist_reason
     ?? (score < 45 ? `Low broker score (${score}/100)` : null)
     ?? (isSlowPay ? `Slow payment history (${avgPaymentDays} days average)` : null)
     ?? (isHighDispute ? `High dispute rate (${Math.round(disputeRate * 100)}%)` : null);

@@ -56,6 +56,7 @@ const VERDICT_COLORS = {
   yellow: { badge: 'warning',  label: 'NEGOTIATE', dot: 'bg-warning' },
   red:    { badge: 'danger',   label: 'NO-GO',     dot: 'bg-danger'  },
 } satisfies Record<string, { badge: BadgeProps['variant']; label: string; dot: string }>;
+type VerdictColor = (typeof VERDICT_COLORS)[keyof typeof VERDICT_COLORS];
 
 const STATUS_LABELS: Record<string, string> = {
   booked: 'Booked', in_transit: 'In Transit', delivered: 'Delivered',
@@ -224,7 +225,7 @@ export function DashboardView() {
           ) : (
             <div className="space-y-2">
               {recentTrips.map(trip => {
-                const vc = trip.verdict ? VERDICT_COLORS[trip.verdict] : null;
+                const vc = trip.verdict ? (VERDICT_COLORS as Record<string, VerdictColor>)[trip.verdict] : null;
                 return (
                   <div key={trip.id} className="flex items-center gap-3 rounded-lg border border-border/50 px-3 py-2.5 hover:bg-secondary/30 transition-colors">
                     <div className={cn('w-2 h-2 rounded-full shrink-0', vc?.dot ?? 'bg-muted-foreground')} />
