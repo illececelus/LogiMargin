@@ -1,419 +1,389 @@
 'use client';
+// ============================================================
+// LogiMargin v7 — DraftReviewView
+// Magic Loading → AI-filled fields → One-tap CONFIRM & SYNC
+// Mobile-first: large touch targets, high contrast, zero clutter
+// ============================================================
 import { useState, useEffect, useCallback } from 'react';
 import { useRouter } from 'next/navigation';
 import {
   CheckCircle2, AlertTriangle, Loader2, FileText,
-  MapPin, DollarSign, Truck, Calendar, XCircle,
+  Zap, TrendingUp, TrendingDown, Minus, DollarSign,
+  MapPin, Truck, Calendar, Shield, ShieldAlert, ChevronDown, ChevronUp,
 } from 'lucide-react';
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
+import { Card, CardContent } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
-import { Input } from '@/components/ui/input';
-import { Label } from '@/components/ui/label';
 import { Badge } from '@/components/ui/badge';
 import { Separator } from '@/components/ui/separator';
+import { cn } from '@/lib/utils';
 import { supabase } from '@/lib/supabase';
-import { cn, fmt } from '@/lib/utils';
+import type { EnrichedDraft } from '@/lib/logimargin-engine';
 
-interface DraftData {
-  id: string;
-  file_url: string;
-  file_name: string;
-  raw_ai_data: Record<string, unknown>;
-  status: string;
-  confidence: number;
-  has_warnings: boolean;
-  warnings: string[];
-  created_at: string;
-}
+// ── Magic Loading Messages ────────────────────────────────────
+const LOADING_STEPS = [
+  { icon: '📄', text: 'Reading your document…' },
+  { icon: '🧠', text: 'Extracting rates & miles…' },
+  { icon: '⛽', text: 'Calculating real profit…' },
+  { icon: '🔍', text: 'Checking broker history…' },
+  { icon: '✅', text: 'Almost done…' },
+];
 
-interface FormState {
-  origin: string;
-  destination: string;
-  grossPay: string;
-  loadedMiles: string;
-  equipmentType: string;
-  brokerName: string;
-  pickupDate: string;
-  deliveryDate: string;
-  fuelCost: string;
-  driverPay: string;
-  tollCost: string;
-}
-
-export function DraftReviewView({ draftId }: { draftId: string }) {
-  const router = useRouter();
-  const [draft, setDraft] = useState<DraftData | null>(null);
-  const [loading, setLoading] = useState(true);
-  const [confirming, setConfirming] = useState(false);
-  const [error, setError] = useState<string | null>(null);
-  const [form, setForm] = useState<FormState>({
-    origin: '', destination: '', grossPay: '', loadedMiles: '',
-    equipmentType: 'dry_van', brokerName: '', pickupDate: '',
-    deliveryDate: '', fuelCost: '', driverPay: '', tollCost: '',
-  });
-
-  const loadDraft = useCallback(async () => {
-    setLoading(true);
-    const { data, error: err } = await supabase
-      .from('load_drafts')
-      .select('*')
-      .eq('id', draftId)
-      .single();
-    if (err || !data) {
-      setError('Draft not found');
-    } else {
-      setDraft(data as DraftData);
-      const ai = data.raw_ai_data as Record<string, unknown>;
-      setForm({
-        origin: (ai.origin as string) ?? '',
-        destination: (ai.destination as string) ?? '',
-        grossPay: ai.grossPay != null ? String(ai.grossPay) : '',
-        loadedMiles: ai.loadedMiles != null ? String(ai.loadedMiles) : '',
-        equipmentType: (ai.equipmentType as string) ?? 'dry_van',
-        brokerName: (ai.brokerName as string) ?? '',
-        pickupDate: (ai.pickupDate as string) ?? '',
-        deliveryDate: (ai.deliveryDate as string) ?? '',
-        fuelCost: '',
-        driverPay: '',
-        tollCost: '',
-      });
-    }
-    setLoading(false);
-  }, [draftId]);
-
-  useEffect(() => { loadDraft(); }, [loadDraft]);
-
-  async function confirmDraft() {
-    setConfirming(true);
-    setError(null);
-    try {
-      const res = await fetch('/api/confirm-draft', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          draftId,
-          overrides: {
-            origin: form.origin || undefined,
-            destination: form.destination || undefined,
-            grossPay: form.grossPay ? parseFloat(form.grossPay) : undefined,
-            loadedMiles: form.loadedMiles ? parseInt(form.loadedMiles) : undefined,
-            equipmentType: form.equipmentType || undefined,
-            brokerName: form.brokerName || undefined,
-            pickupDate: form.pickupDate || undefined,
-            deliveryDate: form.deliveryDate || undefined,
-            fuelCost: form.fuelCost ? parseFloat(form.fuelCost) : 0,
-            driverPay: form.driverPay ? parseFloat(form.driverPay) : 0,
-            tollCost: form.tollCost ? parseFloat(form.tollCost) : 0,
-          },
-        }),
-      });
-      const data = await res.json();
-      if (!res.ok) throw new Error(data.error ?? 'Confirm failed');
-      router.push('/loads');
-    } catch (e) {
-      setError(e instanceof Error ? e.message : 'Unknown error');
-      setConfirming(false);
-    }
-  }
-
-  const confidenceColor = (c: number) =>
-    c >= 0.85 ? 'text-profit' : c >= 0.5 ? 'text-warning' : 'text-danger';
-
-  const confidenceLabel = (c: number) =>
-    c >= 0.85 ? 'High Confidence' : c >= 0.5 ? 'Medium — Review fields' : 'Low — Manual entry needed';
-
-  if (loading) return (
-    <div className="flex items-center justify-center h-64">
-      <Loader2 className="h-8 w-8 animate-spin text-primary" />
+function MagicLoader() {
+  const [step, setStep] = useState(0);
+  useEffect(() => {
+    const interval = setInterval(() => setStep(s => Math.min(s + 1, LOADING_STEPS.length - 1)), 1800);
+    return () => clearInterval(interval);
+  }, []);
+  return (
+    <div className="flex flex-col items-center justify-center min-h-[60vh] gap-6 px-6">
+      <div className="relative">
+        <div className="w-20 h-20 rounded-full bg-primary/10 border-2 border-primary/30 flex items-center justify-center animate-pulse">
+          <span className="text-3xl">{LOADING_STEPS[step].icon}</span>
+        </div>
+        <div className="absolute inset-0 rounded-full border-2 border-primary border-t-transparent animate-spin" />
+      </div>
+      <div className="text-center space-y-2">
+        <p className="text-lg font-bold">AI is analyzing your document</p>
+        <p className="text-sm text-muted-foreground">{LOADING_STEPS[step].text}</p>
+      </div>
+      <div className="flex gap-1.5">
+        {LOADING_STEPS.map((_, i) => (
+          <div key={i} className={cn('w-2 h-2 rounded-full transition-all', i <= step ? 'bg-primary' : 'bg-muted')} />
+        ))}
+      </div>
     </div>
   );
+}
 
-  if (error && !draft) return (
-    <div className="rounded-xl border border-danger/30 bg-danger/5 p-8 text-center">
-      <XCircle className="mx-auto h-8 w-8 text-danger mb-2" />
-      <p className="text-danger font-medium">{error}</p>
-    </div>
-  );
-
-  if (!draft) return null;
-
-  const isConfirmed = draft.status === 'confirmed';
-  const netProfit = (parseFloat(form.grossPay) || 0)
-    - (parseFloat(form.fuelCost) || 0)
-    - (parseFloat(form.driverPay) || 0)
-    - (parseFloat(form.tollCost) || 0);
+// ── Verdict display ───────────────────────────────────────────
+function VerdictBanner({ verdict, aiAction, realProfit, realMarginPct }: {
+  verdict: string | null; aiAction: string | null;
+  realProfit: number | null; realMarginPct: number | null;
+}) {
+  if (!verdict) return null;
+  const isGreen  = verdict === 'green';
+  const isYellow = verdict === 'yellow';
+  const isRed    = verdict === 'red';
 
   return (
-    <div className="space-y-4 animate-slide-up">
-      {/* Header */}
-      <div className="flex items-center justify-between">
-        <div>
-          <h1 className="text-xl font-bold flex items-center gap-2">
-            <FileText className="h-5 w-5 text-primary" />
-            Draft Review
-          </h1>
-          <p className="text-sm text-muted-foreground mt-0.5">{draft.file_name}</p>
-        </div>
-        <div className="flex items-center gap-2">
-          <span className={cn('text-sm font-semibold', confidenceColor(draft.confidence))}>
-            {confidenceLabel(draft.confidence)}
+    <div className={cn(
+      'rounded-2xl p-5 text-center space-y-2 border-2',
+      isGreen  && 'bg-profit/10 border-profit/40',
+      isYellow && 'bg-warning/10 border-warning/40',
+      isRed    && 'bg-danger/10 border-danger/40',
+    )}>
+      <div className="text-4xl">{isGreen ? '🟢' : isYellow ? '🟡' : '🔴'}</div>
+      <p className={cn(
+        'text-2xl font-black tracking-tight',
+        isGreen ? 'text-profit' : isYellow ? 'text-warning' : 'text-danger'
+      )}>
+        {aiAction ?? verdict.toUpperCase()}
+      </p>
+      {realProfit !== null && (
+        <p className="text-sm text-muted-foreground">
+          Est. real profit: <span className={cn('font-bold', realProfit > 0 ? 'text-profit' : 'text-danger')}>
+            ${realProfit.toLocaleString('en-US', { minimumFractionDigits: 0, maximumFractionDigits: 0 })}
           </span>
-          <Badge variant={draft.confidence >= 0.85 ? 'profit' : draft.confidence >= 0.5 ? 'warning' : 'danger'}>
-            {(draft.confidence * 100).toFixed(0)}%
-          </Badge>
-        </div>
-      </div>
+          {realMarginPct !== null && <span className="text-xs ml-1">({realMarginPct.toFixed(1)}% margin)</span>}
+        </p>
+      )}
+    </div>
+  );
+}
 
-      {/* Warnings */}
-      {draft.has_warnings && draft.warnings.length > 0 && (
-        <div className="space-y-2">
-          {draft.warnings.map((w, i) => (
-            <div key={i} className="flex items-center gap-2 rounded-lg border border-warning/30 bg-warning/5 px-3 py-2">
-              <AlertTriangle className="h-4 w-4 text-warning shrink-0" />
-              <p className="text-sm text-warning font-medium">{w}</p>
+// ── Broker Risk Banner ────────────────────────────────────────
+function BrokerRiskBanner({ brokerRisk }: { brokerRisk: any }) {
+  if (!brokerRisk || !brokerRisk.brokerName) return null;
+  const isHighRisk = brokerRisk.isHighRisk;
+  const grade = brokerRisk.grade;
+
+  return (
+    <div className={cn(
+      'rounded-xl p-4 flex items-start gap-3 border',
+      isHighRisk ? 'bg-danger/10 border-danger/30' : 'bg-muted/30 border-border'
+    )}>
+      {isHighRisk
+        ? <ShieldAlert className="h-5 w-5 text-danger shrink-0 mt-0.5" />
+        : <Shield className="h-5 w-5 text-profit shrink-0 mt-0.5" />
+      }
+      <div className="flex-1 min-w-0">
+        <div className="flex items-center gap-2 flex-wrap">
+          <p className="font-bold text-sm">{brokerRisk.brokerName}</p>
+          {grade && (
+            <Badge variant={grade === 'A' || grade === 'B' ? 'profit' : grade === 'C' ? 'warning' : 'danger'}
+              className="text-[10px] font-black">
+              Grade {grade}
+            </Badge>
+          )}
+          {isHighRisk && <Badge variant="danger" className="text-[10px]">HIGH RISK</Badge>}
+        </div>
+        {brokerRisk.riskReason
+          ? <p className="text-xs text-danger mt-1">{brokerRisk.riskReason}</p>
+          : grade
+          ? <p className="text-xs text-muted-foreground mt-1">
+              {brokerRisk.avgPaymentDays ? `Avg ${brokerRisk.avgPaymentDays} days to pay` : 'No payment history yet'}
+            </p>
+          : <p className="text-xs text-muted-foreground mt-1">New broker — no history in system</p>
+        }
+        {brokerRisk.recommendedSurcharge > 0 && (
+          <p className="text-xs font-semibold text-warning mt-1">
+            💡 Add {brokerRisk.recommendedSurcharge}% surcharge to offset risk
+          </p>
+        )}
+      </div>
+    </div>
+  );
+}
+
+// ── Field Row ─────────────────────────────────────────────────
+function FieldRow({ label, value, highlight }: { label: string; value: string | null | undefined; highlight?: boolean }) {
+  if (!value) return null;
+  return (
+    <div className="flex items-start justify-between gap-3 py-3 border-b border-border/40 last:border-0">
+      <p className="text-xs text-muted-foreground uppercase tracking-wide shrink-0 pt-0.5">{label}</p>
+      <p className={cn('text-sm font-semibold text-right', highlight && 'text-profit font-bold text-base')}>{value}</p>
+    </div>
+  );
+}
+
+// ── Warning List ──────────────────────────────────────────────
+function WarningList({ warnings }: { warnings: string[] }) {
+  if (!warnings.length) return null;
+  return (
+    <div className="space-y-2">
+      {warnings.map((w, i) => (
+        <div key={i} className={cn(
+          'flex items-start gap-2 rounded-lg px-3 py-2.5 text-xs',
+          w.includes('HIGH RISK') ? 'bg-danger/10 text-danger border border-danger/20'
+          : 'bg-warning/10 text-warning border border-warning/20'
+        )}>
+          <AlertTriangle className="h-3.5 w-3.5 shrink-0 mt-0.5" />
+          <span>{w}</span>
+        </div>
+      ))}
+    </div>
+  );
+}
+
+// ── Cost Breakdown ────────────────────────────────────────────
+function CostBreakdown({ data }: { data: EnrichedDraft }) {
+  const [open, setOpen] = useState(false);
+  if (!data.estimatedFuelCost && !data.estimatedMaintCost) return null;
+  const fmt = (n: number | null) => n != null ? `$${n.toFixed(0)}` : '—';
+
+  return (
+    <div className="rounded-xl border border-border overflow-hidden">
+      <button
+        onClick={() => setOpen(o => !o)}
+        className="w-full flex items-center justify-between px-4 py-3 bg-muted/20 hover:bg-muted/40 transition-colors"
+      >
+        <span className="text-sm font-semibold flex items-center gap-2">
+          <TrendingDown className="h-4 w-4 text-muted-foreground" /> Estimated Cost Breakdown
+        </span>
+        {open ? <ChevronUp className="h-4 w-4 text-muted-foreground" /> : <ChevronDown className="h-4 w-4 text-muted-foreground" />}
+      </button>
+      {open && (
+        <div className="px-4 pb-3 space-y-0 divide-y divide-border/30">
+          {[
+            ['⛽ Fuel',        data.estimatedFuelCost],
+            ['🔧 Maintenance', data.estimatedMaintCost],
+            ['📋 Factoring (3%)', data.grossPay ? data.grossPay * 0.03 : null],
+            ['🏛️ IFTA Tax (est.)', data.grossPay ? (data.loadedMiles ?? 0) / 6.5 * 0.20 * 0.6 : null],
+          ].map(([label, val]) => (
+            <div key={label as string} className="flex justify-between py-2.5 text-sm">
+              <span className="text-muted-foreground">{label}</span>
+              <span className="font-mono font-semibold">{fmt(val as number | null)}</span>
             </div>
           ))}
         </div>
       )}
+    </div>
+  );
+}
 
-      {isConfirmed && (
-        <div className="flex items-center gap-2 rounded-lg border border-profit/30 bg-profit/5 px-3 py-2">
-          <CheckCircle2 className="h-4 w-4 text-profit" />
-          <p className="text-sm text-profit font-medium">This draft has been confirmed and added to Active Loads.</p>
+// ── Main Component ────────────────────────────────────────────
+export function DraftReviewView({ draftId }: { draftId: string }) {
+  const router = useRouter();
+  const [data, setData] = useState<EnrichedDraft | null>(null);
+  const [warnings, setWarnings] = useState<string[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [confirming, setConfirming] = useState(false);
+  const [confirmed, setConfirmed] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  // Load draft from Supabase
+  useEffect(() => {
+    async function load() {
+      try {
+        const { data: draft, error: err } = await supabase
+          .from('load_drafts')
+          .select('*')
+          .eq('id', draftId)
+          .single();
+        if (err || !draft) throw new Error(err?.message ?? 'Draft not found');
+        setData(draft.raw_ai_data as EnrichedDraft);
+        setWarnings(draft.warnings ?? []);
+      } catch (e) {
+        setError(e instanceof Error ? e.message : 'Failed to load draft');
+      } finally {
+        // Show magic loader for at least 3s for UX delight
+        setTimeout(() => setLoading(false), 3000);
+      }
+    }
+    load();
+  }, [draftId]);
+
+  const handleConfirm = useCallback(async () => {
+    if (!data) return;
+    setConfirming(true);
+    try {
+      const res = await fetch('/api/confirm-draft', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ draftId }),
+      });
+      const json = await res.json();
+      if (!res.ok) throw new Error(json.error ?? 'Confirm failed');
+      setConfirmed(true);
+      setTimeout(() => router.push('/loads'), 1500);
+    } catch (e) {
+      setError(e instanceof Error ? e.message : 'Confirm failed');
+      setConfirming(false);
+    }
+  }, [data, draftId, router]);
+
+  // ── Loading State ─────────────────────────────────────────
+  if (loading) return <MagicLoader />;
+
+  // ── Error State ───────────────────────────────────────────
+  if (error) return (
+    <div className="flex flex-col items-center justify-center min-h-[50vh] gap-4 px-6 text-center">
+      <AlertTriangle className="h-12 w-12 text-danger" />
+      <p className="font-bold text-lg">Something went wrong</p>
+      <p className="text-sm text-muted-foreground">{error}</p>
+      <Button onClick={() => router.back()} variant="outline" className="h-12 px-8">Go Back</Button>
+    </div>
+  );
+
+  // ── Confirmed State ───────────────────────────────────────
+  if (confirmed) return (
+    <div className="flex flex-col items-center justify-center min-h-[60vh] gap-4 text-center">
+      <div className="w-20 h-20 rounded-full bg-profit/20 border-2 border-profit flex items-center justify-center">
+        <CheckCircle2 className="h-10 w-10 text-profit" />
+      </div>
+      <p className="text-2xl font-black text-profit">Load Synced!</p>
+      <p className="text-sm text-muted-foreground">Redirecting to Loads…</p>
+    </div>
+  );
+
+  if (!data) return null;
+
+  const fmt = (n: number | null | undefined, prefix = '$') =>
+    n != null ? `${prefix}${n.toLocaleString('en-US', { minimumFractionDigits: 0, maximumFractionDigits: 0 })}` : '—';
+
+  return (
+    <div className="space-y-5 pb-32 animate-slide-up max-w-xl mx-auto">
+
+      {/* Header */}
+      <div className="flex items-center gap-3">
+        <div className="w-10 h-10 rounded-xl bg-primary/10 flex items-center justify-center shrink-0">
+          <Zap className="h-5 w-5 text-primary" />
+        </div>
+        <div>
+          <h1 className="text-lg font-black">AI Review</h1>
+          <p className="text-xs text-muted-foreground">Confidence: {((data.confidence ?? 0) * 100).toFixed(0)}%</p>
+        </div>
+        <Badge variant={data.confidence >= 0.8 ? 'profit' : data.confidence >= 0.5 ? 'warning' : 'danger'} className="ml-auto">
+          {data.confidence >= 0.8 ? 'HIGH' : data.confidence >= 0.5 ? 'MEDIUM' : 'LOW'} CONFIDENCE
+        </Badge>
+      </div>
+
+      {/* Verdict */}
+      <VerdictBanner
+        verdict={data.verdict ?? null}
+        aiAction={data.aiAction ?? null}
+        realProfit={data.realProfit ?? null}
+        realMarginPct={data.realMarginPct ?? null}
+      />
+
+      {/* Broker Risk */}
+      <BrokerRiskBanner brokerRisk={data.brokerRisk} />
+
+      {/* Warnings */}
+      <WarningList warnings={warnings} />
+
+      {/* Core Fields */}
+      <Card>
+        <CardContent className="pt-4 pb-2">
+          <FieldRow label="Route"
+            value={data.origin && data.destination ? `${data.origin} → ${data.destination}` : null} />
+          <FieldRow label="Gross Pay" value={data.grossPay ? `$${data.grossPay.toLocaleString()}` : null} highlight />
+          <FieldRow label="Real Profit (est.)" value={data.realProfit != null ? `$${Math.round(data.realProfit).toLocaleString()}` : null} highlight />
+          <FieldRow label="Loaded Miles" value={data.loadedMiles ? `${data.loadedMiles.toLocaleString()} mi` : null} />
+          <FieldRow label="RPM (Gross)" value={data.rpmGross ? `$${data.rpmGross.toFixed(2)}/mi` : null} />
+          <FieldRow label="Broker" value={data.brokerName} />
+          <FieldRow label="Equipment" value={data.equipmentType?.replace('_', ' ')} />
+          <FieldRow label="Pickup" value={data.pickupDate} />
+          <FieldRow label="Delivery" value={data.deliveryDate} />
+          <FieldRow label="Load #" value={data.loadNumber} />
+          <FieldRow label="Payment Terms" value={data.paymentTerms} />
+        </CardContent>
+      </Card>
+
+      {/* Cost Breakdown */}
+      <CostBreakdown data={data} />
+
+      {/* Line Items */}
+      {data.lineItems && data.lineItems.length > 0 && (
+        <Card>
+          <CardContent className="pt-4 pb-2">
+            <p className="text-xs font-semibold uppercase tracking-widest text-muted-foreground mb-3">Line Items</p>
+            {data.lineItems.map((item, i) => (
+              <div key={i} className="flex justify-between py-2 border-b border-border/30 last:border-0 text-sm">
+                <span className="text-muted-foreground">{item.description}</span>
+                <span className="font-mono font-semibold">${item.amount.toFixed(2)}</span>
+              </div>
+            ))}
+          </CardContent>
+        </Card>
+      )}
+
+      {/* AI Notes */}
+      {data.notes && (
+        <div className="rounded-xl bg-muted/30 border border-border p-4">
+          <p className="text-xs font-semibold uppercase tracking-widest text-muted-foreground mb-2">AI Notes</p>
+          <p className="text-sm text-muted-foreground leading-relaxed">{data.notes}</p>
         </div>
       )}
 
-      {/* Split View */}
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
-        {/* Left: Document preview */}
-        <Card>
-          <CardHeader>
-            <CardTitle className="text-sm flex items-center gap-2">
-              <FileText className="h-4 w-4" /> Document Preview
-            </CardTitle>
-          </CardHeader>
-          <Separator />
-          <CardContent className="pt-4">
-            {draft.file_url ? (
-              <div className="rounded-lg border bg-muted/20 overflow-hidden">
-                {draft.file_name?.toLowerCase().endsWith('.pdf') ? (
-                  <iframe
-                    src={draft.file_url}
-                    className="w-full h-[500px]"
-                    title="Document preview"
-                  />
-                ) : draft.file_name?.match(/\.(png|jpg|jpeg|webp)$/i) ? (
-                  // eslint-disable-next-line @next/next/no-img-element
-                  <img src={draft.file_url} alt="Document" className="w-full object-contain max-h-[500px]" />
-                ) : (
-                  <div className="p-8 text-center text-muted-foreground space-y-2">
-                    <FileText className="mx-auto h-12 w-12" />
-                    <p className="text-sm">{draft.file_name}</p>
-                    <a
-                      href={draft.file_url}
-                      target="_blank"
-                      rel="noopener noreferrer"
-                      className="text-xs text-primary underline"
-                    >
-                      Open document →
-                    </a>
-                  </div>
-                )}
-              </div>
+      {/* CONFIRM BUTTON — fixed bottom, huge touch target */}
+      <div className="fixed bottom-0 left-0 right-0 p-4 bg-background/95 backdrop-blur-sm border-t border-border z-50">
+        <div className="max-w-xl mx-auto space-y-2">
+          {data.brokerRisk?.isHighRisk && (
+            <p className="text-xs text-center text-danger font-semibold">
+              ⚠️ High risk broker detected — proceed with caution
+            </p>
+          )}
+          <Button
+            onClick={handleConfirm}
+            disabled={confirming}
+            className={cn(
+              'w-full h-16 text-lg font-black tracking-wide rounded-2xl transition-all active:scale-95',
+              data.verdict === 'red'
+                ? 'bg-danger hover:bg-danger/90 text-white'
+                : 'bg-primary hover:bg-primary/90 text-primary-foreground'
+            )}
+          >
+            {confirming ? (
+              <><Loader2 className="h-5 w-5 animate-spin mr-2" /> Syncing…</>
             ) : (
-              <div className="p-8 text-center text-muted-foreground">
-                <FileText className="mx-auto h-8 w-8 mb-2" />
-                <p className="text-sm">No preview available</p>
-              </div>
+              <><CheckCircle2 className="h-5 w-5 mr-2" /> CONFIRM & SYNC</>
             )}
-          </CardContent>
-        </Card>
-
-        {/* Right: Editable form */}
-        <Card>
-          <CardHeader>
-            <CardTitle className="text-sm flex items-center gap-2">
-              <CheckCircle2 className="h-4 w-4" /> AI-Extracted Data — Review & Edit
-            </CardTitle>
-          </CardHeader>
-          <Separator />
-          <CardContent className="pt-4 space-y-4">
-            {/* Route */}
-            <div className="space-y-3">
-              <p className="text-xs font-semibold uppercase tracking-widest text-muted-foreground flex items-center gap-1">
-                <MapPin className="h-3 w-3" /> Route
-              </p>
-              <div className="grid grid-cols-2 gap-3">
-                <div className="space-y-1">
-                  <Label className="text-xs">Origin</Label>
-                  <Input
-                    value={form.origin}
-                    onChange={e => setForm(f => ({ ...f, origin: e.target.value }))}
-                    placeholder="Dallas, TX"
-                    disabled={isConfirmed}
-                    className="h-8 text-sm"
-                  />
-                </div>
-                <div className="space-y-1">
-                  <Label className="text-xs">Destination</Label>
-                  <Input
-                    value={form.destination}
-                    onChange={e => setForm(f => ({ ...f, destination: e.target.value }))}
-                    placeholder="Denver, CO"
-                    disabled={isConfirmed}
-                    className="h-8 text-sm"
-                  />
-                </div>
-              </div>
-              <div className="grid grid-cols-2 gap-3">
-                <div className="space-y-1">
-                  <Label className="text-xs">Pickup Date</Label>
-                  <Input
-                    type="date"
-                    value={form.pickupDate}
-                    onChange={e => setForm(f => ({ ...f, pickupDate: e.target.value }))}
-                    disabled={isConfirmed}
-                    className="h-8 text-sm"
-                  />
-                </div>
-                <div className="space-y-1">
-                  <Label className="text-xs">Delivery Date</Label>
-                  <Input
-                    type="date"
-                    value={form.deliveryDate}
-                    onChange={e => setForm(f => ({ ...f, deliveryDate: e.target.value }))}
-                    disabled={isConfirmed}
-                    className="h-8 text-sm"
-                  />
-                </div>
-              </div>
-            </div>
-
-            <Separator />
-
-            {/* Financials */}
-            <div className="space-y-3">
-              <p className="text-xs font-semibold uppercase tracking-widest text-muted-foreground flex items-center gap-1">
-                <DollarSign className="h-3 w-3" /> Financials
-              </p>
-              <div className="grid grid-cols-2 gap-3">
-                <div className="space-y-1">
-                  <Label className="text-xs">Gross Pay ($)</Label>
-                  <Input
-                    type="number"
-                    value={form.grossPay}
-                    onChange={e => setForm(f => ({ ...f, grossPay: e.target.value }))}
-                    placeholder="3200"
-                    disabled={isConfirmed}
-                    className="h-8 text-sm font-mono"
-                  />
-                </div>
-                <div className="space-y-1">
-                  <Label className="text-xs">Loaded Miles</Label>
-                  <Input
-                    type="number"
-                    value={form.loadedMiles}
-                    onChange={e => setForm(f => ({ ...f, loadedMiles: e.target.value }))}
-                    placeholder="1050"
-                    disabled={isConfirmed}
-                    className="h-8 text-sm font-mono"
-                  />
-                </div>
-                <div className="space-y-1">
-                  <Label className="text-xs">Fuel Cost ($)</Label>
-                  <Input
-                    type="number"
-                    value={form.fuelCost}
-                    onChange={e => setForm(f => ({ ...f, fuelCost: e.target.value }))}
-                    placeholder="0"
-                    disabled={isConfirmed}
-                    className="h-8 text-sm font-mono"
-                  />
-                </div>
-                <div className="space-y-1">
-                  <Label className="text-xs">Driver Pay ($)</Label>
-                  <Input
-                    type="number"
-                    value={form.driverPay}
-                    onChange={e => setForm(f => ({ ...f, driverPay: e.target.value }))}
-                    placeholder="0"
-                    disabled={isConfirmed}
-                    className="h-8 text-sm font-mono"
-                  />
-                </div>
-              </div>
-
-              {/* Live net profit preview */}
-              <div className={cn(
-                'rounded-lg border p-3 flex items-center justify-between',
-                netProfit >= 0 ? 'border-profit/30 bg-profit/5' : 'border-danger/30 bg-danger/5'
-              )}>
-                <span className="text-xs font-semibold uppercase tracking-widest text-muted-foreground">Est. Net Profit</span>
-                <span className={cn('font-mono text-lg font-bold', netProfit >= 0 ? 'text-profit' : 'text-danger')}>
-                  {fmt.currency(netProfit, 0)}
-                </span>
-              </div>
-            </div>
-
-            <Separator />
-
-            {/* Equipment & Broker */}
-            <div className="space-y-3">
-              <p className="text-xs font-semibold uppercase tracking-widest text-muted-foreground flex items-center gap-1">
-                <Truck className="h-3 w-3" /> Load Details
-              </p>
-              <div className="grid grid-cols-2 gap-3">
-                <div className="space-y-1">
-                  <Label className="text-xs">Broker</Label>
-                  <Input
-                    value={form.brokerName}
-                    onChange={e => setForm(f => ({ ...f, brokerName: e.target.value }))}
-                    placeholder="Broker name"
-                    disabled={isConfirmed}
-                    className="h-8 text-sm"
-                  />
-                </div>
-                <div className="space-y-1">
-                  <Label className="text-xs">Equipment</Label>
-                  <Input
-                    value={form.equipmentType}
-                    onChange={e => setForm(f => ({ ...f, equipmentType: e.target.value }))}
-                    placeholder="dry_van"
-                    disabled={isConfirmed}
-                    className="h-8 text-sm"
-                  />
-                </div>
-              </div>
-            </div>
-
-            {error && (
-              <div className="rounded-lg border border-danger/30 bg-danger/5 p-3 flex items-center gap-2">
-                <XCircle className="h-4 w-4 text-danger shrink-0" />
-                <p className="text-sm text-danger">{error}</p>
-              </div>
-            )}
-
-            {!isConfirmed && (
-              <Button
-                onClick={confirmDraft}
-                disabled={confirming}
-                className="w-full bg-profit hover:bg-profit/90 text-white font-bold"
-                size="lg"
-              >
-                {confirming
-                  ? <><Loader2 className="h-4 w-4 animate-spin mr-2" />Confirming…</>
-                  : <><CheckCircle2 className="h-4 w-4 mr-2" />Confirm & Add to Active Loads</>
-                }
-              </Button>
-            )}
-
-            {isConfirmed && (
-              <Button variant="outline" className="w-full" onClick={() => router.push('/loads')}>
-                View Active Loads →
-              </Button>
-            )}
-          </CardContent>
-        </Card>
+          </Button>
+          <Button variant="ghost" className="w-full h-11 text-muted-foreground" onClick={() => router.back()}>
+            Review Later
+          </Button>
+        </div>
       </div>
     </div>
   );
