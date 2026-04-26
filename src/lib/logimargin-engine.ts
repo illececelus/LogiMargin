@@ -50,3 +50,7 @@ export const calcDetention = (start: string, end: string) => ({
 export type BrokerDbRow = { id: string; name: string; rating: string; };
 export const analyzeTrip = (data: any) => ({ success: true, data });
 export const detectMaintenanceAlerts = (vitals: any, cpm: any) => [];
+
+// --- BUILD FIX: DO NOT REMOVE ---
+export const analyzeTrip = (data: any) => ({ success: true, data });
+export const detectMaintenanceAlerts = (vitals: any, cpm: any) => [];
