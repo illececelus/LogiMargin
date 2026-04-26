@@ -2,12 +2,26 @@
 // LogiMargin — /api/fleet-metrics  (Live Supabase KPIs)
 // ============================================================
 import { NextResponse } from 'next/server';
-import { createServerClient } from '@/lib/supabase';
+import { createServerClient, isSupabaseServerConfigured } from '@/lib/supabase';
 
 export const runtime = 'nodejs';
 
+const EMPTY_METRICS = {
+  dailyNetProfit: 0,
+  dailyNetProfitDelta: 0,
+  activeCashFlow: 0,
+  pendingInvoiceCount: 0,
+  fleetHealthScore: 85,
+  activeTrips: 0,
+  redFlagCount: 0,
+};
+
 export async function GET() {
   try {
+    if (!isSupabaseServerConfigured()) {
+      return NextResponse.json(EMPTY_METRICS);
+    }
+
     const db = createServerClient();
     const today = new Date().toISOString().split('T')[0]; // YYYY-MM-DD
 
@@ -81,15 +95,7 @@ export async function GET() {
   } catch (err) {
     console.error('[/api/fleet-metrics]', err);
     // Fallback to zeros — never crash the dashboard
-    return NextResponse.json({
-      dailyNetProfit: 0,
-      dailyNetProfitDelta: 0,
-      activeCashFlow: 0,
-      pendingInvoiceCount: 0,
-      fleetHealthScore: 50,
-      activeTrips: 0,
-      redFlagCount: 0,
-    });
+    return NextResponse.json(EMPTY_METRICS);
   }
 }
 

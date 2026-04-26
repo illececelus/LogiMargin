@@ -5,6 +5,19 @@ const supabaseAnonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY ?? process.env
 const placeholderUrl = 'https://placeholder.supabase.co';
 const placeholderKey = 'placeholder-anon-key';
 
+export const isSupabaseClientConfigured = Boolean(supabaseUrl && supabaseAnonKey);
+
+export function isSupabaseServerConfigured() {
+  return Boolean(
+    process.env.NEXT_PUBLIC_SUPABASE_URL &&
+    (
+      process.env.SUPABASE_SERVICE_ROLE_KEY ??
+      process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY ??
+      process.env.SUPABASE_ANON_KEY
+    )
+  );
+}
+
 export const supabase = createClient(
   supabaseUrl ?? placeholderUrl,
   supabaseAnonKey ?? placeholderKey
