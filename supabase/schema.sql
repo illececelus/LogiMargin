@@ -1,5 +1,5 @@
 -- ============================================================
--- LogiMargin v3 — Supabase Schema
+-- LogiMargin v7 — Supabase Schema
 -- ============================================================
 
 -- Enable UUID extension
@@ -104,6 +104,48 @@ create table if not exists detention_logs (
   created_at        timestamptz not null default now()
 );
 
+-- Backward-compatible name used by the current app UI
+create table if not exists detention_records (
+  id                 uuid primary key default uuid_generate_v4(),
+  user_id            uuid references profiles(id) on delete cascade,
+  facility_name      text,
+  broker_name        text,
+  entry_time         timestamptz,
+  exit_time          timestamptz,
+  detention_minutes  integer,
+  billable_minutes   integer,
+  billable_amount    numeric(10,2),
+  rate_per_hour      numeric(8,2) not null default 50,
+  created_at         timestamptz not null default now()
+);
+
+-- ── AI Load Drafts ────────────────────────────────────────────
+create table if not exists load_drafts (
+  id            uuid primary key default uuid_generate_v4(),
+  user_id       uuid references profiles(id) on delete cascade,
+  file_url      text not null,
+  file_name     text not null,
+  raw_ai_data   jsonb not null default '{}',
+  status        text not null default 'pending' check (status in ('pending','confirmed','rejected')),
+  confidence    numeric(4,3) not null default 0,
+  has_warnings  boolean not null default false,
+  warnings      text[] not null default '{}',
+  created_at    timestamptz not null default now(),
+  updated_at    timestamptz not null default now()
+);
+
+create table if not exists load_documents (
+  id          uuid primary key default uuid_generate_v4(),
+  user_id     uuid references profiles(id) on delete cascade,
+  trip_id     uuid references trips(id) on delete set null,
+  draft_id    uuid references load_drafts(id) on delete set null,
+  doc_type    text not null default 'ratecon',
+  file_url    text not null,
+  file_name   text,
+  metadata    jsonb not null default '{}',
+  created_at  timestamptz not null default now()
+);
+
 -- ── IFTA Trip Legs ────────────────────────────────────────────
 create table if not exists ifta_trip_legs (
   id            uuid primary key default uuid_generate_v4(),
@@ -123,6 +165,9 @@ alter table invoices       enable row level security;
 alter table brokers        enable row level security;
 alter table vehicle_vitals enable row level security;
 alter table detention_logs enable row level security;
+alter table detention_records enable row level security;
+alter table load_drafts enable row level security;
+alter table load_documents enable row level security;
 alter table ifta_trip_legs enable row level security;
 
 create policy "Users own their profiles"       on profiles       for all using (auth.uid() = id);
@@ -131,4 +176,29 @@ create policy "Users own their invoices"       on invoices       for all using (
 create policy "Users own their brokers"        on brokers        for all using (auth.uid() = user_id);
 create policy "Users own their vehicle vitals" on vehicle_vitals for all using (auth.uid() = user_id);
 create policy "Users own their detention logs" on detention_logs for all using (auth.uid() = user_id);
+create policy "Users own their detention records" on detention_records for all using (auth.uid() = user_id);
+create policy "Users own their load drafts" on load_drafts for all using (auth.uid() = user_id);
+create policy "Users own their load documents" on load_documents for all using (auth.uid() = user_id);
 create policy "Users own their IFTA logs"      on ifta_trip_legs for all using (auth.uid() = user_id);
+
+-- Broker score view expected by the API. RLS on base tables still limits rows
+-- for anon/authenticated clients; service-role server calls can aggregate all rows.
+create or replace view broker_scores as
+select
+  t.broker_name,
+  count(*)::integer as total_loads,
+  avg(t.gross_pay) as avg_gross_pay,
+  avg(t.net_margin_pct) as avg_margin_pct,
+  null::numeric as avg_payment_days,
+  0::integer as dispute_count,
+  0::integer as invoice_count,
+  max(t.created_at) as last_load_at
+from trips t
+where t.broker_name is not null and t.broker_name <> ''
+group by t.broker_name;
+
+-- Storage bucket for uploaded RateCons/BOLs. Public read keeps generated URLs
+-- usable by the review UI; uploads are still controlled by API/auth flow.
+insert into storage.buckets (id, name, public)
+values ('logistics_docs', 'logistics_docs', true)
+on conflict (id) do nothing;

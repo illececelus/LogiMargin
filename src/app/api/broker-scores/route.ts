@@ -99,7 +99,7 @@ export async function GET() {
 
     const { data: { user }, error: authErr } = await db.auth.getUser();
     if (authErr || !user) {
-      return NextResponse.json({ error: 'Not authenticated' }, { status: 401 });
+      return NextResponse.json([]);
     }
 
     // broker_scores view'dan çek (user_id RLS otomatik filtreler)
