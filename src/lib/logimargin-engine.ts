@@ -10,6 +10,20 @@ export const loadSchema = z.object({
   status: z.string().default('draft')
 });
 
-export const analyzeTrip = (data: any) => ({ success: true, data });
+/**
+ * AI Yük Analizi Shim
+ */
+export const analyzeTrip = (data: any) => {
+  return { 
+    success: true, 
+    data: data, 
+    scores: { profit: 0, risk: 'low' } 
+  };
+};
 
-export const detectMaintenanceAlerts = (vitals: any, cpm: any) => [];
+/**
+ * Bakım Tahminleme Shim - İki parametre (vitals, cpm) zorunludur.
+ */
+export const detectMaintenanceAlerts = (vitals: any, cpm: any) => {
+  return [];
+};
