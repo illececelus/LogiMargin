@@ -3,7 +3,7 @@
 // Supabase'den broker verisini çek, A/B/C/D skor hesapla
 // ============================================================
 import { NextResponse } from 'next/server';
-import { createServerClient } from '@/lib/supabase';
+import { createServerClient, isSupabaseServerConfigured } from '@/lib/supabase';
 
 export const runtime = 'nodejs';
 
@@ -91,6 +91,10 @@ function calcGrade(avgMargin: number, avgDays: number | null, disputeRate: numbe
 
 export async function GET() {
   try {
+    if (!isSupabaseServerConfigured()) {
+      return NextResponse.json([]);
+    }
+
     const db = createServerClient();
 
     const { data: { user }, error: authErr } = await db.auth.getUser();

@@ -12,7 +12,7 @@ import { Badge } from '@/components/ui/badge';
 import { Separator } from '@/components/ui/separator';
 import { cn, fmt } from '@/lib/utils';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import { supabase } from '@/lib/supabase';
+import { isSupabaseClientConfigured, supabase } from '@/lib/supabase';
 import { calcDetention } from '@/lib/logimargin-engine';
 import type { DetentionResult } from '@/types';
 
@@ -48,6 +48,7 @@ export function DetentionTimer() {
   const { data: history } = useQuery<DetentionHistoryRow[]>({
     queryKey: ['detention-history'],
     queryFn: async () => {
+      if (!isSupabaseClientConfigured) return [];
       const { data } = await supabase
         .from('detention_records')
         .select('*')
@@ -61,6 +62,7 @@ export function DetentionTimer() {
   const saveRecord = useMutation({
     mutationFn: async () => {
       if (!result?.claimData) return;
+      if (!isSupabaseClientConfigured) throw new Error('Supabase is not configured');
       const { data: { user } } = await supabase.auth.getUser();
       if (!user) throw new Error('Not authenticated');
       const { error } = await supabase.from('detention_records').insert({
