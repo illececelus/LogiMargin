@@ -44,6 +44,7 @@ export interface FinancialReport {
   tollCost: number;
   driverPay: number;
   maintCost: number;
+  fixedCost: number;
   factoringCost: number;
   totalCost: number;
   netProfit: number;

@@ -7,9 +7,10 @@ import type {
   Verdict,
 } from '@/types';
 
-const DIESEL_PRICE_PER_GALLON = 3.89;
+const DIESEL_PRICE_PER_GALLON = 3.50;
 const MPG = 6.5;
-const MAINTENANCE_CPM = 0.18;
+const MAINTENANCE_CPM = 0.15;
+const FIXED_TRIP_COST = 200;
 const DEFAULT_FACTORING_RATE = 0.03;
 const IFTA_TAX_PER_GALLON = 0.20;
 const ESTIMATED_TEXAS_MILE_SHARE = 0.6;
@@ -63,6 +64,7 @@ export interface RealProfitResult {
   totalMiles: number;
   estimatedFuelCost: number;
   estimatedMaintCost: number;
+  fixedCost: number;
   estimatedFactoringCost: number;
   estimatedIftaTax: number;
   totalEstimatedCost: number;
@@ -132,11 +134,11 @@ export function calcRealProfit(input: RealProfitInput): RealProfitResult {
   const dieselPrice = positiveOrDefault(input.currentDieselPrice, DIESEL_PRICE_PER_GALLON);
   const factoringRate = input.factoringRate ?? DEFAULT_FACTORING_RATE;
 
-  const estimatedFuelCost = input.fuelCost ?? (totalMiles / MPG) * dieselPrice;
-  const estimatedMaintCost = input.maintCost ?? totalMiles * MAINTENANCE_CPM;
+  const estimatedFuelCost = positiveOrNull(input.fuelCost) ?? (totalMiles / MPG) * dieselPrice;
+  const estimatedMaintCost = positiveOrNull(input.maintCost) ?? totalMiles * MAINTENANCE_CPM;
   const estimatedFactoringCost = grossPay * factoringRate;
   const estimatedIftaTax = (loadedMiles / MPG) * IFTA_TAX_PER_GALLON * ESTIMATED_TEXAS_MILE_SHARE;
-  const totalEstimatedCost = estimatedFuelCost + estimatedMaintCost + estimatedFactoringCost + estimatedIftaTax;
+  const totalEstimatedCost = estimatedFuelCost + estimatedMaintCost + FIXED_TRIP_COST + estimatedFactoringCost + estimatedIftaTax;
   const realProfit = grossPay - totalEstimatedCost;
   const realMarginPct = grossPay > 0 ? (realProfit / grossPay) * 100 : 0;
   const rpmGross = grossPay / totalMiles;
@@ -147,6 +149,7 @@ export function calcRealProfit(input: RealProfitInput): RealProfitResult {
     totalMiles,
     estimatedFuelCost: roundCurrency(estimatedFuelCost),
     estimatedMaintCost: roundCurrency(estimatedMaintCost),
+    fixedCost: FIXED_TRIP_COST,
     estimatedFactoringCost: roundCurrency(estimatedFactoringCost),
     estimatedIftaTax: roundCurrency(estimatedIftaTax),
     totalEstimatedCost: roundCurrency(totalEstimatedCost),
@@ -173,14 +176,17 @@ export function evaluateBrokerRisk(row: BrokerDbRow | null, brokerName: string):
     };
   }
 
-  const score = clamp(Math.round(row.score ?? row.risk_score ?? gradeToScore(row.grade ?? row.rating)), 0, 100);
+  const normalizedGrade = (row.grade ?? row.rating)?.toUpperCase() ?? null;
+  const score = clamp(Math.round(row.score ?? row.risk_score ?? gradeToScore(normalizedGrade)), 0, 100);
   const avgPaymentDays = row.avg_payment_days ?? row.avg_days_to_pay ?? row.days_to_pay_avg ?? null;
   const disputeRate = row.dispute_rate ?? ((row.dispute_count ?? 0) > 0 ? Math.min(1, (row.dispute_count ?? 0) / 10) : 0);
-  const grade = row.grade ?? row.rating ?? scoreToGrade(score);
+  const grade = normalizedGrade ?? scoreToGrade(score);
   const isSlowPay = avgPaymentDays !== null && avgPaymentDays > 45;
   const isHighDispute = disputeRate >= 0.15;
-  const isHighRisk = Boolean(row.is_blacklisted) || score < 45 || isSlowPay || isHighDispute;
+  const isBadCredit = grade === 'F';
+  const isHighRisk = Boolean(row.is_blacklisted) || isBadCredit || score < 45 || isSlowPay || isHighDispute;
   const riskReason = row.blacklist_reason
+    ?? (isBadCredit ? 'Kötü kredi skoru' : null)
     ?? (score < 45 ? `Low broker score (${score}/100)` : null)
     ?? (isSlowPay ? `Slow payment history (${avgPaymentDays} days average)` : null)
     ?? (isHighDispute ? `High dispute rate (${Math.round(disputeRate * 100)}%)` : null);
@@ -212,13 +218,14 @@ export function analyzeTrip(input: {
   const loadedMiles = safeNumber(input.loadedMiles);
   const deadheadMiles = safeNumber(input.deadheadMiles);
   const totalMiles = Math.max(loadedMiles + deadheadMiles, 1);
-  const fuelCost = safeNumber(input.fuelCost);
+  const dieselPrice = positiveOrDefault(input.currentDieselPrice, DIESEL_PRICE_PER_GALLON);
+  const fuelCost = positiveOrNull(input.fuelCost) ?? (totalMiles / MPG) * dieselPrice;
   const tollCost = safeNumber(input.tollCost);
   const driverPay = safeNumber(input.driverPay);
-  const maintCost = safeNumber(input.maintCost);
+  const maintCost = positiveOrNull(input.maintCost) ?? totalMiles * MAINTENANCE_CPM;
   const factoringRate = input.factoringRate ?? DEFAULT_FACTORING_RATE;
   const factoringCost = grossPay * factoringRate;
-  const totalCost = fuelCost + tollCost + driverPay + maintCost + factoringCost;
+  const totalCost = fuelCost + tollCost + driverPay + maintCost + FIXED_TRIP_COST + factoringCost;
   const netProfit = grossPay - totalCost;
   const netMarginPct = grossPay > 0 ? netProfit / grossPay : 0;
   const rpmGross = grossPay / totalMiles;
@@ -238,6 +245,7 @@ export function analyzeTrip(input: {
     tollCost: roundCurrency(tollCost),
     driverPay: roundCurrency(driverPay),
     maintCost: roundCurrency(maintCost),
+    fixedCost: FIXED_TRIP_COST,
     factoringCost: roundCurrency(factoringCost),
     totalCost: roundCurrency(totalCost),
     netProfit: roundCurrency(netProfit),
@@ -418,6 +426,10 @@ function formatDateTime(date: Date) {
 
 function positiveOrDefault(value: number | null | undefined, fallback: number) {
   return typeof value === 'number' && Number.isFinite(value) && value > 0 ? value : fallback;
+}
+
+function positiveOrNull(value: number | null | undefined) {
+  return typeof value === 'number' && Number.isFinite(value) && value > 0 ? value : null;
 }
 
 function safeNumber(value: number | null | undefined) {

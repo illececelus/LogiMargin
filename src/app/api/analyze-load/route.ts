@@ -11,7 +11,7 @@ const AnalyzeLoadSchema = z.object({
   driverPay: z.coerce.number().nonnegative().default(0),
   maintCost: z.coerce.number().nonnegative().default(0),
   factoringRate: z.coerce.number().min(0).max(1).default(0.03),
-  currentDieselPrice: z.coerce.number().positive().default(3.89),
+  currentDieselPrice: z.coerce.number().positive().default(3.50),
 });
 
 export async function POST(req: NextRequest) {
