@@ -33,8 +33,8 @@ const STATUS_LABELS: Record<InvoiceStatus, string> = {
   pending: 'Bekliyor', submitted: 'Gönderildi', approved: 'Onaylandı',
   funded: 'Ödendi', rejected: 'Reddedildi', disputed: 'İtiraz',
 };
-const STATUS_VARIANTS: Record<InvoiceStatus, 'outline' | 'warning' | 'profit' | 'primary' | 'danger' | 'muted'> = {
-  pending: 'outline', submitted: 'warning', approved: 'primary',
+const STATUS_VARIANTS: Record<InvoiceStatus, 'outline' | 'warning' | 'profit' | 'danger' | 'muted'> = {
+  pending: 'outline', submitted: 'warning', approved: 'muted',
   funded: 'profit', rejected: 'danger', disputed: 'danger',
 };
 const NEXT_STATUS: Partial<Record<InvoiceStatus, InvoiceStatus>> = {
