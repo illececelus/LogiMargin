@@ -6,17 +6,42 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Badge } from '@/components/ui/badge';
-import { Separator } from '@/components/ui/separator';
 import { cn, fmt } from '@/lib/utils';
 import { detectMaintenanceAlerts } from '@/lib/logimargin-engine';
 import type { VehicleVitals, MaintenanceAlert } from '@/types';
 
-const DEFAULTS: VehicleVitals & { currentCpm: number } = {
-  currentOdometer: 487_500, engineHours: 14_200,
-  lastOilChangeMi: 475_000, lastTireRotateMi: 462_000,
-  lastInjectorSvcMi: 387_000, lastDefFluidMi: 479_000,
-  baselineCpm: 0.82, currentCpm: 0.97,
+interface FormState {
+  currentOdometer: number;
+  engineHours: number;
+  lastOilChangeMi: number;
+  lastTireRotateMi: number;
+  lastInjectorSvcMi: number;
+  lastDefFluidMi: number;
+  baselineCpm: number;
+  currentCpm: number;
+}
+
+const DEFAULTS: FormState = {
+  currentOdometer: 487_500,
+  engineHours: 14_200,
+  lastOilChangeMi: 475_000,
+  lastTireRotateMi: 462_000,
+  lastInjectorSvcMi: 387_000,
+  lastDefFluidMi: 479_000,
+  baselineCpm: 0.82,
+  currentCpm: 0.97,
 };
+
+const FIELDS: { key: keyof FormState; label: string; step: string }[] = [
+  { key: 'currentOdometer',   label: 'Odometer (mi)',        step: '100'  },
+  { key: 'lastOilChangeMi',   label: 'Last Oil Change mi',   step: '100'  },
+  { key: 'lastTireRotateMi',  label: 'Last Tire Rotate mi',  step: '100'  },
+  { key: 'lastInjectorSvcMi', label: 'Last Injector Svc mi', step: '1000' },
+  { key: 'lastDefFluidMi',    label: 'Last DEF Fill mi',     step: '100'  },
+  { key: 'baselineCpm',       label: 'Baseline CPM ($)',     step: '0.01' },
+  { key: 'currentCpm',        label: 'Current CPM ($)',      step: '0.01' },
+  { key: 'engineHours',       label: 'Engine Hours',         step: '10'   },
+];
 
 function AlertCard({ alert }: { alert: MaintenanceAlert }) {
   const cfg = {
@@ -46,17 +71,22 @@ function AlertCard({ alert }: { alert: MaintenanceAlert }) {
 }
 
 export function MaintenancePredictor() {
-  const [form, setForm] = useState(DEFAULTS);
+  const [form, setForm] = useState<FormState>(DEFAULTS);
   const [alerts, setAlerts] = useState<MaintenanceAlert[] | null>(null);
 
-  function set(k: string, v: number) { setForm(prev => ({ ...prev, [k]: v })); }
+  function set(k: keyof FormState, v: number) {
+    setForm(prev => ({ ...prev, [k]: v }));
+  }
 
   function run() {
     const vitals: VehicleVitals = {
-      currentOdometer: form.currentOdometer, engineHours: form.engineHours,
-      lastOilChangeMi: form.lastOilChangeMi, lastTireRotateMi: form.lastTireRotateMi,
-      lastInjectorSvcMi: form.lastInjectorSvcMi, lastDefFluidMi: form.lastDefFluidMi,
-      baselineCpm: form.baselineCpm,
+      currentOdometer:   form.currentOdometer,
+      engineHours:       form.engineHours,
+      lastOilChangeMi:   form.lastOilChangeMi,
+      lastTireRotateMi:  form.lastTireRotateMi,
+      lastInjectorSvcMi: form.lastInjectorSvcMi,
+      lastDefFluidMi:    form.lastDefFluidMi,
+      baselineCpm:       form.baselineCpm,
     };
     setAlerts(detectMaintenanceAlerts(vitals, form.currentCpm));
   }
@@ -67,32 +97,37 @@ export function MaintenancePredictor() {
   return (
     <div className="space-y-6 animate-slide-up">
       <div>
-        <h1 className="text-xl font-bold flex items-center gap-2"><Wrench className="h-5 w-5 text-warning" /> Mechanic's Eye</h1>
+        <h1 className="text-xl font-bold flex items-center gap-2">
+          <Wrench className="h-5 w-5 text-warning" /> Mechanic&apos;s Eye
+        </h1>
         <p className="text-sm text-muted-foreground mt-1">Predictive maintenance alerts based on mileage and CPM spikes.</p>
       </div>
 
       <Card>
-        <CardHeader><CardTitle className="text-sm flex items-center gap-2"><Gauge className="h-4 w-4 text-blue-400" />Vehicle Vitals</CardTitle></CardHeader>
+        <CardHeader>
+          <CardTitle className="text-sm flex items-center gap-2">
+            <Gauge className="h-4 w-4 text-blue-400" />Vehicle Vitals
+          </CardTitle>
+        </CardHeader>
         <CardContent className="space-y-4">
           <div className="grid grid-cols-2 gap-4 sm:grid-cols-4">
-            {[
-              { key: 'currentOdometer',   label: 'Odometer (mi)',       step: '100'  },
-              { key: 'lastOilChangeMi',   label: 'Last Oil Change mi',  step: '100'  },
-              { key: 'lastTireRotateMi',  label: 'Last Tire Rotate mi', step: '100'  },
-              { key: 'lastInjectorSvcMi', label: 'Last Injector Svc mi',step: '1000' },
-              { key: 'lastDefFluidMi',    label: 'Last DEF Fill mi',    step: '100'  },
-              { key: 'baselineCpm',       label: 'Baseline CPM ($)',    step: '0.01' },
-              { key: 'currentCpm',        label: 'Current CPM ($)',     step: '0.01' },
-              { key: 'engineHours',       label: 'Engine Hours',        step: '10'   },
-            ].map(({ key, label, step }) => (
+            {FIELDS.map(({ key, label, step }) => (
               <div key={key} className="space-y-1.5">
                 <Label htmlFor={key}>{label}</Label>
-                <Input id={key} type="number" step={step} value={(form as Record<string, number>)[key] ?? 0}
-                  onChange={e => set(key, Number(e.target.value))} className="font-mono" />
+                <Input
+                  id={key}
+                  type="number"
+                  step={step}
+                  value={form[key]}
+                  onChange={e => set(key, Number(e.target.value))}
+                  className="font-mono"
+                />
               </div>
             ))}
           </div>
-          <Button onClick={run} className="w-full sm:w-auto"><Wrench className="h-4 w-4" />Run Diagnostic</Button>
+          <Button onClick={run} className="w-full sm:w-auto">
+            <Wrench className="h-4 w-4" />Run Diagnostic
+          </Button>
         </CardContent>
       </Card>
 
