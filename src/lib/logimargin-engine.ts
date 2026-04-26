@@ -416,5 +416,4 @@ export const fmt = {
   rpm: (v: number) => `$${v.toFixed(2)}/mi`,
 };
 export const analyzeTrip = (data: any) => ({ success: true, data });
-export const detectMaintenanceAlerts = (data: any) => [];
 export const detectMaintenanceAlerts = (vitals: any, cpm: any) => [];
