@@ -1,13 +1,14 @@
 'use client';
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
-import { LayoutDashboard, Truck, DollarSign, Wrench, Timer } from 'lucide-react';
+import { LayoutDashboard, Truck, DollarSign, Wrench, Timer, Star } from 'lucide-react';
 import { cn } from '@/lib/utils';
 
 const NAV = [
   { href: '/',            label: 'Dashboard',  Icon: LayoutDashboard },
   { href: '/loads',       label: 'Loads',      Icon: Truck           },
   { href: '/factoring',   label: 'Factoring',  Icon: DollarSign      },
+  { href: '/brokers',     label: 'Brokers',    Icon: Star            },
   { href: '/maintenance', label: 'Mechanic',   Icon: Wrench          },
   { href: '/detention',   label: 'Detention',  Icon: Timer           },
 ] as const;
@@ -21,11 +22,11 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
           <div className="flex items-center gap-1.5">
             <span className="text-lg font-black tracking-tight text-primary">LOGI</span>
             <span className="text-lg font-black tracking-tight">MARGIN</span>
-            <span className="ml-1 rounded bg-primary/20 px-1.5 py-0.5 text-[10px] font-bold uppercase tracking-wider text-primary border border-primary/30">TX v3</span>
+            <span className="ml-1 rounded bg-primary/20 px-1.5 py-0.5 text-[10px] font-bold uppercase tracking-wider text-primary border border-primary/30">TX v5</span>
           </div>
           <nav className="flex items-center gap-1">
             {NAV.map(({ href, label, Icon }) => {
-              const active = pathname === href;
+              const active = pathname === href || pathname.startsWith(href + '/');
               return (
                 <Link key={href} href={href} className={cn(
                   'flex items-center gap-1.5 rounded-lg px-3 py-1.5 text-sm font-medium transition-colors',

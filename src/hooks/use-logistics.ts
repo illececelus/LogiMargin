@@ -13,7 +13,7 @@ export function useTrips() {
     queryFn: async (): Promise<TripRow[]> => {
       const { data, error } = await supabase
         .from('trips')
-        .select('id, origin, destination, gross_pay, net_profit, logimargin_score, verdict, action, status, pickup_date')
+        .select('id, origin, destination, gross_pay, net_profit, logimargin_score, verdict, action, status, pickup_date, broker_name')
         .order('created_at', { ascending: false })
         .limit(50);
       if (error) throw new Error(error.message);
@@ -28,6 +28,7 @@ export function useTrips() {
         action: r.action,
         status: r.status,
         pickupDate: r.pickup_date,
+        brokerName: r.broker_name,
       }));
     },
     staleTime: 30_000,
@@ -68,7 +69,7 @@ export function useInvoices() {
         .from('invoices')
         .select(`
           id, invoice_number, invoice_amount, advance_amount,
-          status, has_ai_errors, ai_error_amount,
+          status, has_ai_errors, ai_error_amount, paid_at, payment_days,
           trips(origin, destination)
         `)
         .order('created_at', { ascending: false })
@@ -83,6 +84,8 @@ export function useInvoices() {
         status: r.status as InvoiceStatus,
         hasAiErrors: r.has_ai_errors,
         aiErrorAmount: r.ai_error_amount,
+        paidAt: r.paid_at ?? null,
+        paymentDays: r.payment_days ?? null,
       }));
     },
     staleTime: 30_000,
@@ -105,7 +108,11 @@ export function useUpdateInvoiceStatus() {
       return { prev };
     },
     onError: (_e, _v, ctx) => qc.setQueryData(['invoices'], ctx?.prev),
-    onSettled: () => qc.invalidateQueries({ queryKey: ['invoices'] }),
+    onSettled: () => {
+      qc.invalidateQueries({ queryKey: ['invoices'] });
+      // Broker skorlarını da güncelle (payment_days değişmiş olabilir)
+      qc.invalidateQueries({ queryKey: ['broker-scores'] });
+    },
   });
 }
 
