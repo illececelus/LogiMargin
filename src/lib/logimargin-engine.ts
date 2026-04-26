@@ -417,3 +417,4 @@ export const fmt = {
 };
 export const analyzeTrip = (data: any) => ({ success: true, data });
 export const detectMaintenanceAlerts = (data: any) => [];
+export const detectMaintenanceAlerts = (vitals: any, cpm: any) => [];
