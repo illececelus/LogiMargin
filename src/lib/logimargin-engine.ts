@@ -22,13 +22,11 @@ export const loadSchema = z.object({
 });
 
 // Build Hatalarını Çözen Exportlar
-export const analyzeTrip = (data: any) => ({ 
   success: true, 
   data, 
   scores: { profit: 0, risk: 'low' } 
 });
 
-export const detectMaintenanceAlerts = (vitals: any, cpm: any) => {
   return [];
 };
 
@@ -50,3 +48,5 @@ export const calcDetention = (start: string, end: string) => ({
 });
 
 export type BrokerDbRow = { id: string; name: string; rating: string; };
+export const analyzeTrip = (data: any) => ({ success: true, data });
+export const detectMaintenanceAlerts = (vitals: any, cpm: any) => [];
