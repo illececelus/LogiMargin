@@ -1,5 +1,5 @@
 // ============================================================
-// LogiMargin — Shared Type Definitions v3
+// LogiMargin — Shared Type Definitions v6
 // ============================================================
 export type UserRole = 'owner_op' | 'fleet_manager' | 'driver';
 export type EquipmentType = 'dry_van' | 'flatbed' | 'reefer' | 'step_deck' | 'lowboy' | 'tanker' | 'car_hauler';
@@ -26,8 +26,22 @@ export interface FinancialReport {
 export interface AuditError { field: string; invoicedValue: string; expectedValue: string; difference: number; severity: 'critical' | 'warning' | 'info'; description: string; }
 export interface FreightAuditResult { invoiceNumber: string; invoicedAmount: number; expectedAmount: number; discrepancyAmount: number; hasErrors: boolean; confidence: number; errors: AuditError[]; summary: string; recommendation: string; }
 export interface DashboardKPIs { dailyNetProfit: number; dailyNetProfitDelta: number; activeCashFlow: number; pendingInvoiceCount: number; fleetHealthScore: number; activeTrips: number; redFlagCount: number; }
-export interface TripRow { id: string; origin: string; destination: string; grossPay: number; netProfit: number | null; logimarginScore: number | null; verdict: Verdict | null; action: string | null; status: TripStatus; pickupDate: string | null; }
-export interface InvoiceRow { id: string; invoiceNumber: string; tripRoute: string; invoiceAmount: number; advanceAmount: number | null; status: InvoiceStatus; hasAiErrors: boolean; aiErrorAmount: number | null; }
+
+export interface TripRow {
+  id: string; origin: string; destination: string;
+  grossPay: number; netProfit: number | null;
+  logimarginScore: number | null; verdict: Verdict | null;
+  action: string | null; status: TripStatus;
+  pickupDate: string | null; brokerName?: string | null;
+}
+
+export interface InvoiceRow {
+  id: string; invoiceNumber: string; tripRoute: string;
+  invoiceAmount: number; advanceAmount: number | null;
+  status: InvoiceStatus; hasAiErrors: boolean;
+  aiErrorAmount: number | null;
+  paidAt?: string | null; paymentDays?: number | null;
+}
 
 // ── Module 1: Broker Integrity ────────────────────────────────
 export type BrokerRiskLevel = 'low' | 'medium' | 'high' | 'blacklisted';
