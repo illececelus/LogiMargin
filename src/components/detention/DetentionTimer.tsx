@@ -40,6 +40,12 @@ export function DetentionTimer() {
   const detentionRate = Number.isFinite(parsedRate) && parsedRate > 0 ? parsedRate : 50;
 
   useEffect(() => {
+    if (!entryTime && (!Number.isFinite(parsedRate) || parsedRate <= 0)) {
+      setRatePerHour('50');
+    }
+  }, [entryTime, parsedRate]);
+
+  useEffect(() => {
     if (entryTime && !stopped) {
       intervalRef.current = setInterval(() => setNow(new Date()), 1000);
     }
@@ -169,9 +175,15 @@ Saygılarımızla` : '';
             <div className="space-y-1.5">
               <Label htmlFor="rate">Detention Ücreti ($/saat)</Label>
               <Input id="rate" type="number" value={ratePerHour}
-                min="0"
+                autoComplete="off"
+                min="1"
                 step="1"
                 onChange={e => setRatePerHour(e.target.value)}
+                onBlur={() => {
+                  if (!Number.isFinite(parsedRate) || parsedRate <= 0) {
+                    setRatePerHour('50');
+                  }
+                }}
                 className="font-mono" disabled={!!entryTime && !stopped}
               />
             </div>
