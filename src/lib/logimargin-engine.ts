@@ -415,3 +415,5 @@ export const fmt = {
   miles: (v: number) => `${Math.round(v).toLocaleString()} mi`,
   rpm: (v: number) => `$${v.toFixed(2)}/mi`,
 };
+export const analyzeTrip = (data: any) => ({ success: true, data });
+export const detectMaintenanceAlerts = (data: any) => [];
