@@ -56,7 +56,7 @@ jobs:
       - name: Create pull request for safe improvements
         uses: peter-evans/create-pull-request@v6
         with:
-          branch: automation/nightly-app-autopilot
+          branch: cursor/nightly-app-autopilot-113c
           delete-branch: true
           title: "Nightly app autopilot maintenance"
           commit-message: "Apply nightly autopilot maintenance updates"
