@@ -7,7 +7,11 @@
     "build": "next build",
     "start": "next start",
     "lint": "eslint .",
-    "type-check": "tsc --noEmit"
+    "type-check": "tsc --noEmit",
+    "maintenance": "npm run lint && npm run type-check && npm audit --omit=dev --audit-level=high",
+    "app:builder": "npm run lint && npm run type-check && npm run build",
+    "ci:daily-maintenance": "npm run maintenance",
+    "ci:app-builder": "npm run app:builder"
   },
   "dependencies": {
     "@anthropic-ai/sdk": "^0.39.0",
