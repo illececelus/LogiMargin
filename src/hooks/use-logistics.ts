@@ -3,14 +3,34 @@
 // ============================================================
 'use client';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import { supabase } from '@/lib/supabase';
+import { isSupabaseClientConfigured, supabase } from '@/lib/supabase';
 import type { TripRow, InvoiceRow, InvoiceStatus } from '@/types';
+
+type InvoiceQueryRow = {
+  id: string;
+  invoice_number: string;
+  invoice_amount: number;
+  advance_amount: number | null;
+  status: string;
+  has_ai_errors: boolean;
+  ai_error_amount: number | null;
+  paid_at: string | null;
+  payment_days: number | null;
+  trips: { origin: string; destination: string } | { origin: string; destination: string }[] | null;
+};
+
+function invoiceTripRoute(trips: InvoiceQueryRow['trips']) {
+  const trip = Array.isArray(trips) ? trips[0] : trips;
+  return trip ? `${trip.origin} → ${trip.destination}` : 'No trip linked';
+}
 
 // ── useTrips ──────────────────────────────────────────────────
 export function useTrips() {
   return useQuery({
     queryKey: ['trips'],
     queryFn: async (): Promise<TripRow[]> => {
+      if (!isSupabaseClientConfigured) return [];
+
       const { data, error } = await supabase
         .from('trips')
         .select('id, origin, destination, gross_pay, net_profit, logimargin_score, verdict, action, status, pickup_date, broker_name')
@@ -46,6 +66,8 @@ export function useInsertTrip() {
       logimargin_score?: number; verdict?: string; action?: string;
       pickup_date?: string; delivery_date?: string; broker_name?: string; broker_rating?: string;
     }) => {
+      if (!isSupabaseClientConfigured) throw new Error('Supabase is not configured');
+
       const { data: { user } } = await supabase.auth.getUser();
       if (!user) throw new Error('Not authenticated');
       const { data, error } = await supabase
@@ -65,6 +87,8 @@ export function useInvoices() {
   return useQuery({
     queryKey: ['invoices'],
     queryFn: async (): Promise<InvoiceRow[]> => {
+      if (!isSupabaseClientConfigured) return [];
+
       const { data, error } = await supabase
         .from('invoices')
         .select(`
@@ -75,10 +99,10 @@ export function useInvoices() {
         .order('created_at', { ascending: false })
         .limit(50);
       if (error) throw new Error(error.message);
-      return (data ?? []).map((r: any) => ({
+      return ((data ?? []) as InvoiceQueryRow[]).map(r => ({
         id: r.id,
         invoiceNumber: r.invoice_number,
-        tripRoute: r.trips ? `${r.trips.origin} → ${r.trips.destination}` : 'No trip linked',
+        tripRoute: invoiceTripRoute(r.trips),
         invoiceAmount: r.invoice_amount,
         advanceAmount: r.advance_amount,
         status: r.status as InvoiceStatus,
@@ -96,6 +120,8 @@ export function useUpdateInvoiceStatus() {
   const qc = useQueryClient();
   return useMutation({
     mutationFn: async ({ id, status }: { id: string; status: InvoiceStatus }) => {
+      if (!isSupabaseClientConfigured) throw new Error('Supabase is not configured');
+
       const { error } = await supabase.from('invoices').update({ status }).eq('id', id);
       if (error) throw new Error(error.message);
     },
@@ -121,6 +147,8 @@ export function useMaintenance() {
   return useQuery({
     queryKey: ['vehicle-vitals'],
     queryFn: async () => {
+      if (!isSupabaseClientConfigured) return [];
+
       const { data, error } = await supabase
         .from('vehicle_vitals')
         .select('*')

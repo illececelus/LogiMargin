@@ -30,7 +30,39 @@ export interface MaintenanceVitals {
 
 export type Verdict = 'green' | 'yellow' | 'red';
 
-export type InvoiceStatus = 'pending' | 'submitted' | 'approved' | 'funded' | 'rejected' | 'disputed';
+export interface TripFlag {
+  type: 'warning' | 'red_flag';
+  message: string;
+}
+
+export interface FinancialReport {
+  grossPay: number;
+  loadedMiles: number;
+  deadheadMiles: number;
+  totalMiles: number;
+  fuelCost: number;
+  tollCost: number;
+  driverPay: number;
+  maintCost: number;
+  factoringCost: number;
+  totalCost: number;
+  netProfit: number;
+  netMarginPct: number;
+  rpmGross: number;
+  rpmNet: number;
+  cpm: number;
+  deadheadPct: number;
+  logimarginScore: number;
+  verdict: Verdict;
+  action: string;
+  flags: TripFlag[];
+  ifta: {
+    totalMiles: number;
+    txMiles: number;
+    estimatedFuelGallons: number;
+    estimatedTxTax: number;
+  };
+}
 
 export interface DashboardKPIs {
   dailyNetProfit: number;
@@ -40,33 +72,6 @@ export interface DashboardKPIs {
   fleetHealthScore: number;
   activeTrips: number;
   redFlagCount: number;
-}
-
-export interface FinancialReport {
-  grossPay: number;
-  loadedMiles: number;
-  deadheadMiles: number;
-  totalMiles: number;
-  totalCost: number;
-  netProfit: number;
-  netMarginPct: number;
-  logimarginScore: number;
-  verdict: Verdict;
-  action: string;
-  rpmGross: number;
-  rpmNet: number;
-  cpm: number;
-  deadheadPct: number;
-  flags: Array<{
-    type: 'red_flag' | 'warning';
-    message: string;
-  }>;
-  ifta: {
-    totalMiles: number;
-    txMiles: number;
-    estimatedFuelGallons: number;
-    estimatedTxTax: number;
-  };
 }
 
 export interface TripRow {
@@ -82,6 +87,8 @@ export interface TripRow {
   pickupDate: string | null;
   brokerName: string | null;
 }
+
+export type InvoiceStatus = 'pending' | 'submitted' | 'approved' | 'funded' | 'rejected' | 'disputed';
 
 export interface InvoiceRow {
   id: string;
@@ -117,21 +124,6 @@ export interface FreightAuditResult {
   recommendation: string;
 }
 
-export interface DetentionResult {
-  detentionMinutes: number;
-  billableMinutes: number;
-  billableAmount: number;
-  claimData: {
-    facilityName: string;
-    entryTime: string;
-    exitTime: string;
-    detentionHours: number;
-    billableHours: number;
-    totalClaim: number;
-    legalStatement: string;
-  } | null;
-}
-
 export interface VehicleVitals {
   currentOdometer: number;
   engineHours: number;
@@ -149,4 +141,21 @@ export interface MaintenanceAlert {
   triggerMetric: string;
   estimatedCost?: number;
   milesUntilDue?: number;
+}
+
+export interface DetentionClaimData {
+  facilityName: string;
+  entryTime: string;
+  exitTime: string;
+  detentionHours: number;
+  billableHours: number;
+  totalClaim: number;
+  legalStatement: string;
+}
+
+export interface DetentionResult {
+  detentionMinutes: number;
+  billableMinutes: number;
+  billableAmount: number;
+  claimData: DetentionClaimData | null;
 }

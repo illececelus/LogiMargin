@@ -5,6 +5,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { createServerClient } from '@/lib/supabase';
 import Anthropic from '@anthropic-ai/sdk';
+import type { ContentBlockParam } from '@anthropic-ai/sdk/resources/messages';
 import {
   AiParsedDocSchema,
   calcRealProfit,
@@ -91,6 +92,10 @@ export async function POST(req: NextRequest) {
 
       if (isPdf) {
         const base64 = Buffer.from(fileBuffer).toString('base64');
+        const documentBlock: ContentBlockParam = {
+          type: 'document',
+          source: { type: 'base64', media_type: 'application/pdf', data: base64 },
+        };
         const response = await anthropic.messages.create({
           model: 'claude-sonnet-4-6',
           max_tokens: 2000,
@@ -98,7 +103,7 @@ export async function POST(req: NextRequest) {
           messages: [{
             role: 'user',
             content: [
-              { type: 'document', source: { type: 'base64', media_type: 'application/pdf', data: base64 } } as any,
+              documentBlock,
               { type: 'text', text: `Parse this ${docTypeHint}. Return only JSON.` },
             ],
           }],

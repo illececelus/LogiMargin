@@ -12,9 +12,17 @@ import { Badge } from '@/components/ui/badge';
 import { Separator } from '@/components/ui/separator';
 import { cn, fmt } from '@/lib/utils';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import { supabase } from '@/lib/supabase';
+import { isSupabaseClientConfigured, supabase } from '@/lib/supabase';
 import { calcDetention } from '@/lib/logimargin-engine';
 import type { DetentionResult } from '@/types';
+
+type DetentionHistoryRow = {
+  id: string;
+  facility_name: string | null;
+  created_at: string;
+  billable_amount: number | null;
+  billable_minutes: number | null;
+};
 
 export function DetentionTimer() {
   const qc = useQueryClient();
@@ -37,9 +45,10 @@ export function DetentionTimer() {
   }, [entryTime, stopped]);
 
   // Load detention history
-  const { data: history } = useQuery({
+  const { data: history } = useQuery<DetentionHistoryRow[]>({
     queryKey: ['detention-history'],
     queryFn: async () => {
+      if (!isSupabaseClientConfigured) return [];
       const { data } = await supabase
         .from('detention_records')
         .select('*')
@@ -53,6 +62,7 @@ export function DetentionTimer() {
   const saveRecord = useMutation({
     mutationFn: async () => {
       if (!result?.claimData) return;
+      if (!isSupabaseClientConfigured) throw new Error('Supabase is not configured');
       const { data: { user } } = await supabase.auth.getUser();
       if (!user) throw new Error('Not authenticated');
       const { error } = await supabase.from('detention_records').insert({
@@ -296,15 +306,15 @@ Saygılarımızla` : '';
           </CardHeader>
           <Separator />
           <CardContent className="pt-3 space-y-2">
-            {history.map((rec: any) => (
+            {history.map(rec => (
               <div key={rec.id} className="flex items-center justify-between gap-3 px-1 py-2 border-b border-border/30 last:border-0">
                 <div className="min-w-0">
                   <p className="text-sm font-medium truncate">{rec.facility_name || '—'}</p>
                   <p className="text-xs text-muted-foreground">{new Date(rec.created_at).toLocaleDateString('tr-TR')}</p>
                 </div>
                 <div className="text-right shrink-0">
-                  <p className="font-mono text-sm font-bold text-danger">{fmt.currency(rec.billable_amount, 0)}</p>
-                  <p className="text-[10px] text-muted-foreground">{rec.billable_minutes} dk</p>
+                  <p className="font-mono text-sm font-bold text-danger">{fmt.currency(rec.billable_amount ?? 0, 0)}</p>
+                  <p className="text-[10px] text-muted-foreground">{rec.billable_minutes ?? 0} dk</p>
                 </div>
               </div>
             ))}

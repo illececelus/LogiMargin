@@ -1,7 +1,9 @@
 import { AiLoadSchema } from './schemas';
 
+type RawAiOutput = unknown;
+
 export const SchemaAgent = {
-  processAiDraft: (rawAiOutput: any) => {
+  processAiDraft: (rawAiOutput: RawAiOutput) => {
     try {
       const validated = AiLoadSchema.parse(rawAiOutput);
       

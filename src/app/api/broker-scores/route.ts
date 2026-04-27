@@ -3,7 +3,7 @@
 // Supabase'den broker verisini çek, A/B/C/D skor hesapla
 // ============================================================
 import { NextResponse } from 'next/server';
-import { createServerClient } from '@/lib/supabase';
+import { createServerClient, isSupabaseServerConfigured } from '@/lib/supabase';
 
 export const runtime = 'nodejs';
 
@@ -20,6 +20,22 @@ export interface BrokerScore {
   gradeColor: string;
   recommendation: string;
   score: number;              // 0-100 composite
+}
+
+interface BrokerScoreRow {
+  broker_name: string;
+  total_loads: number;
+  avg_gross_pay: number | string | null;
+  avg_margin_pct: number | string | null;
+  avg_payment_days: number | string | null;
+  dispute_count: number | null;
+  invoice_count: number | null;
+  last_load_at: string | null;
+}
+
+function parseDbNumber(value: number | string | null): number {
+  if (typeof value === 'number') return value;
+  return parseFloat(value ?? '0');
 }
 
 function calcGrade(avgMargin: number, avgDays: number | null, disputeRate: number): {
@@ -75,11 +91,15 @@ function calcGrade(avgMargin: number, avgDays: number | null, disputeRate: numbe
 
 export async function GET() {
   try {
+    if (!isSupabaseServerConfigured()) {
+      return NextResponse.json([]);
+    }
+
     const db = createServerClient();
 
     const { data: { user }, error: authErr } = await db.auth.getUser();
     if (authErr || !user) {
-      return NextResponse.json({ error: 'Not authenticated' }, { status: 401 });
+      return NextResponse.json([]);
     }
 
     // broker_scores view'dan çek (user_id RLS otomatik filtreler)
@@ -135,20 +155,22 @@ export async function GET() {
     }
 
     // View'dan gelen veriyi işle
-    const scores: BrokerScore[] = (data ?? []).map((row: any) => {
-      const avgMargin = parseFloat(row.avg_margin_pct ?? '0');
-      const avgDays = row.avg_payment_days ? parseFloat(row.avg_payment_days) : null;
-      const disputeRate = row.invoice_count > 0 ? row.dispute_count / row.invoice_count : 0;
+    const scores: BrokerScore[] = ((data ?? []) as BrokerScoreRow[]).map(row => {
+      const invoiceCount = row.invoice_count ?? 0;
+      const disputeCount = row.dispute_count ?? 0;
+      const avgMargin = parseDbNumber(row.avg_margin_pct);
+      const avgDays = row.avg_payment_days ? parseDbNumber(row.avg_payment_days) : null;
+      const disputeRate = invoiceCount > 0 ? disputeCount / invoiceCount : 0;
       const { grade, gradeColor, recommendation, score } = calcGrade(avgMargin, avgDays, disputeRate);
 
       return {
         brokerName: row.broker_name,
         totalLoads: row.total_loads,
-        avgGrossPay: parseFloat(row.avg_gross_pay ?? '0'),
+        avgGrossPay: parseDbNumber(row.avg_gross_pay),
         avgMarginPct: avgMargin,
         avgPaymentDays: avgDays,
-        disputeCount: row.dispute_count ?? 0,
-        invoiceCount: row.invoice_count ?? 0,
+        disputeCount,
+        invoiceCount,
         lastLoadAt: row.last_load_at ?? null,
         grade, gradeColor, recommendation, score,
       };
