@@ -13,6 +13,7 @@ import { Progress } from '@/components/ui/progress';
 import { Separator } from '@/components/ui/separator';
 import { cn, fmt } from '@/lib/utils';
 import { useTrips } from '@/hooks/use-logistics';
+import { getLocalInvoices, getLocalVehicleVitals } from '@/lib/local-store';
 import { authHeaders } from '@/lib/supabase-auth';
 import type { DashboardKPIs, Verdict } from '@/types';
 
@@ -92,7 +93,24 @@ export function DashboardView() {
     </div>
   );
 
-  const kpi = data!;
+  const localInvoices = getLocalInvoices();
+  const localVitals = getLocalVehicleVitals();
+  const tripRows = trips ?? [];
+  const localNetProfit = tripRows.reduce((sum, trip) => sum + (trip.netProfit ?? 0), 0);
+  const localActiveTrips = tripRows.filter(trip => ACTIVE_TRIP_STATUSES.has(trip.status)).length;
+  const localRedFlags = tripRows.filter(trip => trip.verdict === 'red').length;
+  const latestVitals = localVitals[0];
+  const oilDelta = latestVitals ? latestVitals.current_odometer - latestVitals.last_oil_change_mi : 0;
+  const offlineFleetHealth = Math.max(0, Math.min(100, 85 - localRedFlags * 10 - (oilDelta > 15_000 ? 20 : oilDelta > 12_000 ? 10 : 0)));
+  const kpi = {
+    ...data!,
+    dailyNetProfit: data!.dailyNetProfit || localNetProfit,
+    activeCashFlow: data!.activeCashFlow || localInvoices.filter(i => i.status === 'pending' || i.status === 'submitted').reduce((sum, inv) => sum + inv.invoiceAmount, 0),
+    pendingInvoiceCount: data!.pendingInvoiceCount || localInvoices.filter(i => i.status === 'pending').length,
+    activeTrips: data!.activeTrips || localActiveTrips,
+    redFlagCount: data!.redFlagCount || localRedFlags,
+    fleetHealthScore: localVitals.length > 0 ? offlineFleetHealth : data!.fleetHealthScore,
+  };
   const healthColor = kpi.fleetHealthScore >= 80 ? 'text-profit' : kpi.fleetHealthScore >= 60 ? 'text-warning' : 'text-danger';
   const healthBarClass = kpi.fleetHealthScore >= 80 ? '[&>div]:bg-profit' : kpi.fleetHealthScore >= 60 ? '[&>div]:bg-warning' : '[&>div]:bg-danger';
   const profitTrend = kpi.dailyNetProfitDelta > 0 ? 'up' : kpi.dailyNetProfitDelta < 0 ? 'down' : 'neutral';

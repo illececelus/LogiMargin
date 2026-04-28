@@ -36,11 +36,14 @@ Use real Supabase values in `.env.local`; placeholder values are intentionally t
 
 ```bash
 NEXT_PUBLIC_SUPABASE_URL=https://<project-ref>.supabase.co
+NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY=<publishable-key>
 NEXT_PUBLIC_SUPABASE_ANON_KEY=<anon-key>
 SUPABASE_SERVICE_ROLE_KEY=<service-role-key>
 ```
 
 Optional anonymous session bootstrap is enabled by default so the MVP can save trips, maintenance records, detention records, and uploaded drafts without a dedicated login screen. Set `NEXT_PUBLIC_SUPABASE_AUTO_ANON=false` if you want to require an existing Supabase Auth session.
+
+If Supabase is temporarily unavailable, core operational saves fall back to localStorage so dispatch can keep working: load analyzer saves, maintenance vitals, and detention claims/history remain usable offline and are reflected in dashboard/broker views.
 
 ## Build
 ```bash

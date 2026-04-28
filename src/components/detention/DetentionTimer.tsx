@@ -3,6 +3,7 @@ import { useState, useEffect, useRef } from 'react';
 import {
   Timer, Play, Square, FileText, Clock,
   Mail, History, AlertTriangle, Save, CheckCircle2, Loader2,
+  MapPin,
 } from 'lucide-react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -13,13 +14,18 @@ import { Separator } from '@/components/ui/separator';
 import { cn, fmt } from '@/lib/utils';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { isSupabaseClientConfigured, supabase } from '@/lib/supabase';
-import { getSupabaseAccessToken } from '@/lib/supabase-auth';
+import { getCurrentSupabaseUser } from '@/lib/supabase-auth';
+import { getLocalDetentionRecords, insertLocalDetentionRecord, type LocalDetentionRecord } from '@/lib/local-store';
 import { calcDetention } from '@/lib/logimargin-engine';
 import type { DetentionResult } from '@/types';
 
 type DetentionHistoryRow = {
   id: string;
   facility_name: string | null;
+  broker_name?: string | null;
+  facility_address?: string | null;
+  latitude?: number | null;
+  longitude?: number | null;
   created_at: string;
   billable_amount: number | null;
   billable_minutes: number | null;
@@ -29,6 +35,9 @@ type PersistedDetentionState = {
   facilityName: string;
   brokerName: string;
   ratePerHour: number;
+  facilityAddress: string;
+  latitude: number | null;
+  longitude: number | null;
   entryTimeIso: string | null;
   exitTimeIso: string | null;
   stopped: boolean;
@@ -40,6 +49,10 @@ export function DetentionTimer() {
   const qc = useQueryClient();
   const [facilityName, setFacilityName] = useState('');
   const [brokerName, setBrokerName]     = useState('');
+  const [facilityAddress, setFacilityAddress] = useState('');
+  const [latitude, setLatitude]         = useState<number | null>(null);
+  const [longitude, setLongitude]       = useState<number | null>(null);
+  const [locationError, setLocationError] = useState<string | null>(null);
   const [ratePerHour, setRatePerHour]   = useState(50);
   const [entryTime, setEntryTime]       = useState<Date | null>(null);
   const [exitTime, setExitTime]         = useState<Date | null>(null);
@@ -65,6 +78,9 @@ export function DetentionTimer() {
 
       setFacilityName(parsed.facilityName ?? '');
       setBrokerName(parsed.brokerName ?? '');
+      setFacilityAddress(parsed.facilityAddress ?? '');
+      setLatitude(parsed.latitude ?? null);
+      setLongitude(parsed.longitude ?? null);
       setRatePerHour(Number.isFinite(parsed.ratePerHour) ? parsed.ratePerHour : 50);
       setEntryTime(hydratedEntry);
       setExitTime(hydratedExit);
@@ -92,12 +108,15 @@ export function DetentionTimer() {
       facilityName,
       brokerName,
       ratePerHour,
+      facilityAddress,
+      latitude,
+      longitude,
       entryTimeIso: entryTime?.toISOString() ?? null,
       exitTimeIso: exitTime?.toISOString() ?? null,
       stopped,
     };
     window.localStorage.setItem(DETENTION_STORAGE_KEY, JSON.stringify(payload));
-  }, [brokerName, entryTime, exitTime, facilityName, hydrated, ratePerHour, stopped]);
+  }, [brokerName, entryTime, exitTime, facilityAddress, facilityName, hydrated, latitude, longitude, ratePerHour, stopped]);
 
   useEffect(() => {
     if (entryTime && !stopped) {
@@ -110,7 +129,7 @@ export function DetentionTimer() {
   const { data: history } = useQuery<DetentionHistoryRow[]>({
     queryKey: ['detention-history'],
     queryFn: async () => {
-      if (!isSupabaseClientConfigured) return [];
+      if (!isSupabaseClientConfigured) return getLocalDetentionRecords();
       const { data } = await supabase
         .from('detention_records')
         .select('*')
@@ -124,25 +143,31 @@ export function DetentionTimer() {
   const saveRecord = useMutation({
     mutationFn: async () => {
       if (!result?.claimData) return;
-      if (!isSupabaseClientConfigured) throw new Error('Supabase is not configured');
-      await getSupabaseAccessToken();
-      const { data: { user } } = await supabase.auth.getUser();
-      if (!user) throw new Error('Not authenticated');
-      const { error } = await supabase.from('detention_records').insert({
-        user_id: user.id,
+      const payload: Omit<LocalDetentionRecord, 'id' | 'created_at'> = {
         facility_name: facilityName,
         broker_name: brokerName || null,
-        entry_time: entryTime?.toISOString(),
-        exit_time: new Date().toISOString(),
+        facility_address: facilityAddress || null,
+        latitude,
+        longitude,
+        entry_time: entryTime?.toISOString() ?? null,
+        exit_time: exitTime?.toISOString() ?? new Date().toISOString(),
         detention_minutes: result.detentionMinutes,
         billable_minutes: result.billableMinutes,
         billable_amount: result.billableAmount,
         rate_per_hour: ratePerHour,
-      });
-      if (error) {
-        // Table may not exist yet — silently succeed
-        console.warn('detention_records table not found, skipping save');
+      };
+
+      if (!isSupabaseClientConfigured) {
+        insertLocalDetentionRecord(payload);
+        return;
       }
+
+      const user = await getCurrentSupabaseUser();
+      const { error } = await supabase.from('detention_records').insert({
+        user_id: user.id,
+        ...payload,
+      });
+      if (error) throw new Error(error.message);
     },
     onSuccess: () => {
       setSaved(true);
@@ -161,6 +186,22 @@ export function DetentionTimer() {
     setNow(startedAt);
   }
 
+  function captureLocation() {
+    setLocationError(null);
+    if (!navigator.geolocation) {
+      setLocationError('Tarayıcı lokasyon desteği vermiyor.');
+      return;
+    }
+    navigator.geolocation.getCurrentPosition(
+      pos => {
+        setLatitude(Number(pos.coords.latitude.toFixed(6)));
+        setLongitude(Number(pos.coords.longitude.toFixed(6)));
+      },
+      err => setLocationError(err.message || 'Lokasyon alınamadı.'),
+      { enableHighAccuracy: true, timeout: 10_000 }
+    );
+  }
+
   function stopTimer() {
     if (!entryTime) return;
     const stoppedAt = new Date();
@@ -177,6 +218,10 @@ export function DetentionTimer() {
   function resetTimer() {
     setFacilityName('');
     setBrokerName('');
+    setFacilityAddress('');
+    setLatitude(null);
+    setLongitude(null);
+    setLocationError(null);
     setRatePerHour(50);
     setEntryTime(null);
     setExitTime(null);
@@ -198,6 +243,11 @@ export function DetentionTimer() {
   const mm = Math.floor((elapsed % 3600) / 60).toString().padStart(2, '0');
   const ss = (elapsed % 60).toString().padStart(2, '0');
   const isBillable = (display?.detentionMinutes ?? 0) > 120;
+  const mapUrl = latitude != null && longitude != null
+    ? `https://www.google.com/maps/search/?api=1&query=${latitude},${longitude}`
+    : facilityAddress
+      ? `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(facilityAddress)}`
+      : null;
 
   // Email draft generator
   const emailDraft = result?.claimData ? `Konu: Detention Ücreti Talebi — ${facilityName || 'Tesis'}
@@ -262,6 +312,33 @@ Saygılarımızla` : '';
                   placeholder="ör. Coyote Logistics"
                   disabled={!!entryTime && !stopped}
                 />
+              </div>
+              <div className="space-y-1.5">
+                <Label htmlFor="facilityAddress">Lokasyon / Adres</Label>
+                <Input id="facilityAddress" value={facilityAddress}
+                  onChange={e => setFacilityAddress(e.target.value)}
+                  placeholder="ör. 123 Border Rd, Laredo, TX"
+                  disabled={!!entryTime && !stopped}
+                />
+              </div>
+              <div className="rounded-2xl border border-white/10 bg-slate-950/50 p-3">
+                <div className="flex items-center justify-between gap-3">
+                  <div className="min-w-0">
+                    <p className="text-xs font-semibold text-slate-300">Konum Kaydı</p>
+                    <p className="mt-1 truncate font-mono text-[11px] text-slate-500">
+                      {latitude != null && longitude != null ? `${latitude}, ${longitude}` : 'GPS veya adres ile harita linki oluşturulur'}
+                    </p>
+                  </div>
+                  <Button type="button" variant="outline" size="sm" onClick={captureLocation} disabled={!!entryTime && !stopped}>
+                    GPS Al
+                  </Button>
+                </div>
+                {mapUrl && (
+                  <a href={mapUrl} target="_blank" rel="noreferrer" className="mt-2 inline-flex text-xs font-semibold text-emerald-300 hover:text-emerald-200">
+                    Haritada Aç
+                  </a>
+                )}
+                {locationError && <p className="mt-2 text-xs text-danger">{locationError}</p>}
               </div>
               <div className="space-y-1.5">
                 <Label htmlFor="rate">Detention Ücreti ($/saat)</Label>
@@ -371,6 +448,13 @@ Saygılarımızla` : '';
                 onClick={() => navigator.clipboard.writeText(result.claimData!.legalStatement)}>
                 <FileText className="h-3.5 w-3.5 mr-1.5" /> Beyanı Kopyala
               </Button>
+              {mapUrl && (
+                <Button variant="outline" size="sm" asChild>
+                  <a href={mapUrl} target="_blank" rel="noreferrer">
+                    <MapPin className="h-3.5 w-3.5 mr-1.5" /> Haritada Aç
+                  </a>
+                </Button>
+              )}
               <Button variant="outline" size="sm" onClick={() => setShowEmail(e => !e)}>
                 <Mail className="h-3.5 w-3.5 mr-1.5" /> {showEmail ? 'E-postayı Gizle' : 'E-posta Taslağı'}
               </Button>
@@ -422,18 +506,30 @@ Saygılarımızla` : '';
           </CardHeader>
           <Separator />
           <CardContent className="pt-3 space-y-2">
-            {history.map(rec => (
-              <div key={rec.id} className="flex items-center justify-between gap-3 px-1 py-2 border-b border-border/30 last:border-0">
-                <div className="min-w-0">
-                  <p className="text-sm font-medium truncate">{rec.facility_name || '—'}</p>
-                  <p className="text-xs text-muted-foreground">{new Date(rec.created_at).toLocaleDateString('tr-TR')}</p>
+            {history.map(rec => {
+              const recMapUrl = rec.latitude != null && rec.longitude != null
+                ? `https://www.google.com/maps/search/?api=1&query=${rec.latitude},${rec.longitude}`
+                : rec.facility_address
+                  ? `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(rec.facility_address)}`
+                  : null;
+              return (
+                <div key={rec.id} className="flex items-center justify-between gap-3 px-1 py-2 border-b border-border/30 last:border-0">
+                  <div className="min-w-0">
+                    <p className="text-sm font-medium truncate">{rec.facility_name || '-'}</p>
+                    <p className="text-xs text-muted-foreground">{new Date(rec.created_at).toLocaleDateString('tr-TR')}</p>
+                    {recMapUrl && (
+                      <a href={recMapUrl} target="_blank" rel="noreferrer" className="text-[10px] text-emerald-300 hover:underline">
+                        Lokasyonu aç
+                      </a>
+                    )}
+                  </div>
+                  <div className="text-right shrink-0">
+                    <p className="font-mono text-sm font-bold text-danger">{fmt.currency(rec.billable_amount ?? 0, 0)}</p>
+                    <p className="text-[10px] text-muted-foreground">{rec.billable_minutes ?? 0} dk</p>
+                  </div>
                 </div>
-                <div className="text-right shrink-0">
-                  <p className="font-mono text-sm font-bold text-danger">{fmt.currency(rec.billable_amount ?? 0, 0)}</p>
-                  <p className="text-[10px] text-muted-foreground">{rec.billable_minutes ?? 0} dk</p>
-                </div>
-              </div>
-            ))}
+              );
+            })}
           </CardContent>
         </Card>
       )}
