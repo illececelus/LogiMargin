@@ -212,7 +212,8 @@ export function analyzeTrip(input: {
   const loadedMiles = safeNumber(input.loadedMiles);
   const deadheadMiles = safeNumber(input.deadheadMiles);
   const totalMiles = Math.max(loadedMiles + deadheadMiles, 1);
-  const fuelCost = safeNumber(input.fuelCost);
+  const dieselPrice = positiveOrDefault(input.currentDieselPrice, DIESEL_PRICE_PER_GALLON);
+  const fuelCost = positiveOrDefault(input.fuelCost, (totalMiles / MPG) * dieselPrice);
   const tollCost = safeNumber(input.tollCost);
   const driverPay = safeNumber(input.driverPay);
   const maintCost = safeNumber(input.maintCost);
