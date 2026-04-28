@@ -147,7 +147,11 @@ export function BrokerScorecard() {
       {error && (
         <div className="rounded-xl border border-danger/30 bg-danger/5 p-6 text-center">
           <XCircle className="mx-auto h-8 w-8 text-danger mb-2" />
-          <p className="text-sm text-danger font-medium">Broker verileri yüklenemedi.</p>
+          <p className="text-sm text-danger font-medium">
+            {error instanceof Error && error.message.includes('sign in')
+              ? 'Broker skorlarını görmek için giriş yapmalısın.'
+              : 'Broker verileri yüklenemedi.'}
+          </p>
           <button onClick={() => refetch()} className="mt-2 text-xs text-primary underline">Tekrar dene</button>
         </div>
       )}

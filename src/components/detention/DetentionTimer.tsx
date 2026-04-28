@@ -13,7 +13,8 @@ import { Badge } from '@/components/ui/badge';
 import { Separator } from '@/components/ui/separator';
 import { cn, fmt } from '@/lib/utils';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import { isSupabaseClientConfigured, supabase } from '@/lib/supabase';
+import { isSupabaseClientConfigured } from '@/lib/supabase';
+import { createClient } from '@/utils/supabase/client';
 import { getLocalDetentionRecords, insertLocalDetentionRecord, type LocalDetentionRecord } from '@/lib/local-store';
 import { calcDetention } from '@/lib/logimargin-engine';
 import type { DetentionResult } from '@/types';
@@ -129,6 +130,7 @@ export function DetentionTimer() {
     queryKey: ['detention-history'],
     queryFn: async () => {
       if (!isSupabaseClientConfigured) return getLocalDetentionRecords();
+      const supabase = createClient();
       const { data } = await supabase
         .from('detention_records')
         .select('*')
@@ -161,6 +163,7 @@ export function DetentionTimer() {
         return;
       }
 
+      const supabase = createClient();
       const { data: { user } } = await supabase.auth.getUser();
       if (!user) throw new Error('Not authenticated');
       const { error } = await supabase.from('detention_records').insert({

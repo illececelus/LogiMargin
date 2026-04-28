@@ -3,7 +3,8 @@
 // ============================================================
 'use client';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import { isSupabaseClientConfigured, supabase } from '@/lib/supabase';
+import { isSupabaseClientConfigured } from '@/lib/supabase';
+import { createClient } from '@/utils/supabase/client';
 import { getLocalInvoices, getLocalTrips, insertLocalTrip } from '@/lib/local-store';
 import type { TripRow, InvoiceRow, InvoiceStatus } from '@/types';
 
@@ -20,6 +21,20 @@ type InvoiceQueryRow = {
   trips: { origin: string; destination: string } | { origin: string; destination: string }[] | null;
 };
 
+type TripQueryRow = {
+  id: string;
+  origin: string;
+  destination: string;
+  gross_pay: number;
+  net_profit: number | null;
+  logimargin_score: number | null;
+  verdict: TripRow['verdict'];
+  action: string | null;
+  status: string;
+  pickup_date: string | null;
+  broker_name: string | null;
+};
+
 function invoiceTripRoute(trips: InvoiceQueryRow['trips']) {
   const trip = Array.isArray(trips) ? trips[0] : trips;
   return trip ? `${trip.origin} → ${trip.destination}` : 'No trip linked';
@@ -32,12 +47,13 @@ export function useTrips() {
     queryFn: async (): Promise<TripRow[]> => {
       if (!isSupabaseClientConfigured) return getLocalTrips();
 
+      const supabase = createClient();
       const { data, error } = await supabase
         .from('trips')
         .select('id, origin, destination, gross_pay, net_profit, logimargin_score, verdict, action, status, pickup_date, broker_name')
         .order('created_at', { ascending: false })
         .limit(50);
-      const remoteTrips = !error ? (data ?? []).map(r => ({
+      const remoteTrips = !error ? ((data ?? []) as TripQueryRow[]).map(r => ({
         id: r.id,
         origin: r.origin,
         destination: r.destination,
@@ -70,6 +86,7 @@ export function useInsertTrip() {
     }) => {
       if (!isSupabaseClientConfigured) return insertLocalTrip(trip);
 
+      const supabase = createClient();
       const { data: { user } } = await supabase.auth.getUser();
       if (!user) throw new Error('Not authenticated. Please sign in to save this load.');
       const { data, error } = await supabase
@@ -91,6 +108,7 @@ export function useInvoices() {
     queryFn: async (): Promise<InvoiceRow[]> => {
       if (!isSupabaseClientConfigured) return getLocalInvoices();
 
+      const supabase = createClient();
       const { data, error } = await supabase
         .from('invoices')
         .select(`
@@ -124,6 +142,9 @@ export function useUpdateInvoiceStatus() {
     mutationFn: async ({ id, status }: { id: string; status: InvoiceStatus }) => {
       if (!isSupabaseClientConfigured) throw new Error('Supabase is not configured');
 
+      const supabase = createClient();
+      const { data: { user } } = await supabase.auth.getUser();
+      if (!user) throw new Error('Not authenticated. Please sign in to update invoices.');
       const { error } = await supabase.from('invoices').update({ status }).eq('id', id);
       if (error) throw new Error(error.message);
     },
@@ -151,6 +172,7 @@ export function useMaintenance() {
     queryFn: async () => {
       if (!isSupabaseClientConfigured) return [];
 
+      const supabase = createClient();
       const { data, error } = await supabase
         .from('vehicle_vitals')
         .select('*')
