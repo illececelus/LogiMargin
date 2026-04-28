@@ -13,10 +13,11 @@ import { Progress } from '@/components/ui/progress';
 import { Separator } from '@/components/ui/separator';
 import { cn, fmt } from '@/lib/utils';
 import { useTrips } from '@/hooks/use-logistics';
+import { authHeaders } from '@/lib/supabase-auth';
 import type { DashboardKPIs, Verdict } from '@/types';
 
 async function fetchKPIs(): Promise<DashboardKPIs> {
-  const res = await fetch('/api/fleet-metrics');
+  const res = await fetch('/api/fleet-metrics', { headers: await authHeaders() });
   if (!res.ok) throw new Error('Failed to fetch KPIs');
   return res.json();
 }
@@ -94,6 +95,7 @@ export function DashboardView() {
   const kpi = data!;
   const healthColor = kpi.fleetHealthScore >= 80 ? 'text-profit' : kpi.fleetHealthScore >= 60 ? 'text-warning' : 'text-danger';
   const healthBarClass = kpi.fleetHealthScore >= 80 ? '[&>div]:bg-profit' : kpi.fleetHealthScore >= 60 ? '[&>div]:bg-warning' : '[&>div]:bg-danger';
+  const profitTrend = kpi.dailyNetProfitDelta > 0 ? 'up' : kpi.dailyNetProfitDelta < 0 ? 'down' : 'neutral';
 
   return (
     <div className="space-y-6 animate-slide-up">
@@ -117,7 +119,7 @@ export function DashboardView() {
           title="Net Kar (Bugün)"
           value={fmt.currency(kpi.dailyNetProfit, 0)}
           icon={DollarSign}
-          trend={kpi.dailyNetProfitDelta > 0 ? 'up' : 'down'}
+          trend={profitTrend}
           delta={kpi.dailyNetProfitDelta}
           className="border-profit/20"
         />

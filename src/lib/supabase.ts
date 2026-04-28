@@ -5,16 +5,22 @@ const supabaseAnonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY ?? process.env
 const placeholderUrl = 'https://placeholder.supabase.co';
 const placeholderKey = 'placeholder-anon-key';
 
-export const isSupabaseClientConfigured = Boolean(supabaseUrl && supabaseAnonKey);
+function hasUsableValue(value: string | undefined, placeholders: string[]) {
+  return Boolean(value && !placeholders.some(placeholder => value.includes(placeholder)));
+}
+
+export const isSupabaseClientConfigured =
+  hasUsableValue(supabaseUrl, ['placeholder.supabase.co', 'example.supabase.co', 'your-project.supabase.co']) &&
+  hasUsableValue(supabaseAnonKey, ['placeholder', 'your-anon-key']);
 
 export function isSupabaseServerConfigured() {
-  return Boolean(
-    process.env.NEXT_PUBLIC_SUPABASE_URL &&
-    (
-      process.env.SUPABASE_SERVICE_ROLE_KEY ??
-      process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY ??
-      process.env.SUPABASE_ANON_KEY
-    )
+  const key =
+    process.env.SUPABASE_SERVICE_ROLE_KEY ??
+    process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY ??
+    process.env.SUPABASE_ANON_KEY;
+  return (
+    hasUsableValue(process.env.NEXT_PUBLIC_SUPABASE_URL, ['placeholder.supabase.co', 'example.supabase.co', 'your-project.supabase.co']) &&
+    hasUsableValue(key, ['placeholder', 'your-service-role-key', 'your-anon-key'])
   );
 }
 

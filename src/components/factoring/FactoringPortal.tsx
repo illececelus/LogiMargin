@@ -12,6 +12,7 @@ import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Separator } from '@/components/ui/separator';
 import { cn, fmt } from '@/lib/utils';
+import { getSupabaseAccessToken } from '@/lib/supabase-auth';
 import { useInvoices, useUpdateInvoiceStatus } from '@/hooks/use-logistics';
 import type { FreightAuditResult, InvoiceStatus } from '@/types';
 
@@ -73,7 +74,12 @@ export function FactoringPortal() {
       fd.append('file', file);
       fd.append('mode', mode);
       if (mode === 'ratecon') {
-        const res = await fetch('/api/upload-draft', { method: 'POST', body: fd });
+        const token = await getSupabaseAccessToken();
+        const res = await fetch('/api/upload-draft', {
+          method: 'POST',
+          body: fd,
+          headers: token ? { Authorization: `Bearer ${token}` } : undefined,
+        });
         const data = await res.json();
         if (!res.ok) throw new Error(data.error ?? 'Upload failed');
         setDraftRedirect(data.redirectTo);

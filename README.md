@@ -28,7 +28,19 @@ cp .env.example .env.local
 npm run dev
 ```
 
-Run the SQL in `supabase/schema.sql` in your Supabase Dashboard → SQL Editor.
+Run the SQL in `supabase/schema.sql` in your Supabase Dashboard → SQL Editor. This creates the app tables, RLS policies, `broker_scores` view, `profiles` auto-bootstrap trigger, and `logistics_docs` storage bucket/policies required for saving data.
+
+### Supabase connection
+
+Use real Supabase values in `.env.local`; placeholder values are intentionally treated as "not configured":
+
+```bash
+NEXT_PUBLIC_SUPABASE_URL=https://<project-ref>.supabase.co
+NEXT_PUBLIC_SUPABASE_ANON_KEY=<anon-key>
+SUPABASE_SERVICE_ROLE_KEY=<service-role-key>
+```
+
+Optional anonymous session bootstrap is enabled by default so the MVP can save trips, maintenance records, detention records, and uploaded drafts without a dedicated login screen. Set `NEXT_PUBLIC_SUPABASE_AUTO_ANON=false` if you want to require an existing Supabase Auth session.
 
 ## Build
 ```bash

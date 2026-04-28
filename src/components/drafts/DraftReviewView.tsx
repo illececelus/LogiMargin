@@ -15,7 +15,8 @@ import { Card, CardContent } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { cn } from '@/lib/utils';
-import { supabase } from '@/lib/supabase';
+import { isSupabaseClientConfigured, supabase } from '@/lib/supabase';
+import { getSupabaseAccessToken } from '@/lib/supabase-auth';
 import type { BrokerRiskResult, EnrichedDraft } from '@/lib/logimargin-engine';
 
 // ── Magic Loading Messages ────────────────────────────────────
@@ -214,6 +215,10 @@ export function DraftReviewView({ draftId }: { draftId: string }) {
   useEffect(() => {
     async function load() {
       try {
+        if (!isSupabaseClientConfigured) {
+          throw new Error('Supabase is not configured. Configure Supabase to review uploaded drafts.');
+        }
+
         const { data: draft, error: err } = await supabase
           .from('load_drafts')
           .select('*')
@@ -236,9 +241,13 @@ export function DraftReviewView({ draftId }: { draftId: string }) {
     if (!data) return;
     setConfirming(true);
     try {
+      const token = await getSupabaseAccessToken();
       const res = await fetch('/api/confirm-draft', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: {
+          'Content-Type': 'application/json',
+          ...(token ? { Authorization: `Bearer ${token}` } : {}),
+        },
         body: JSON.stringify({ draftId }),
       });
       const json = await res.json();

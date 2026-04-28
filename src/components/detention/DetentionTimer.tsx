@@ -13,6 +13,7 @@ import { Separator } from '@/components/ui/separator';
 import { cn, fmt } from '@/lib/utils';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { isSupabaseClientConfigured, supabase } from '@/lib/supabase';
+import { getSupabaseAccessToken } from '@/lib/supabase-auth';
 import { calcDetention } from '@/lib/logimargin-engine';
 import type { DetentionResult } from '@/types';
 
@@ -124,6 +125,7 @@ export function DetentionTimer() {
     mutationFn: async () => {
       if (!result?.claimData) return;
       if (!isSupabaseClientConfigured) throw new Error('Supabase is not configured');
+      await getSupabaseAccessToken();
       const { data: { user } } = await supabase.auth.getUser();
       if (!user) throw new Error('Not authenticated');
       const { error } = await supabase.from('detention_records').insert({

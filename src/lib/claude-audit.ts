@@ -1,4 +1,5 @@
 import Anthropic from '@anthropic-ai/sdk';
+import type { Message } from '@anthropic-ai/sdk/resources/messages';
 import type { FreightAuditResult, AuditError } from '@/types';
 
 const client = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY });
@@ -16,6 +17,10 @@ Output ONLY valid JSON:
 const RATECON_PARSE_PROMPT = `You are a freight document parser. Extract structured data from RateCon documents.
 Return ONLY valid JSON: { "brokerName": "string", "loadNumber": "string", "grossPay": number, "loadedMiles": number|null, "lineItems": [{"description":"string","amount":number}], "paymentTerms": "string", "confidence": number }`;
 
+function firstTextBlockText(content: Message['content'], fallback = '') {
+  return content.find(block => block.type === 'text')?.text ?? fallback;
+}
+
 export async function runFreightAudit(ocrText: string, rateConOcrText?: string, expectedAmount?: number): Promise<FreightAuditResult> {
   let userContent = `Audit this freight invoice:\n\n=== INVOICE ===\n${ocrText}\n`;
   if (rateConOcrText) userContent += `\n=== RATE CONFIRMATION ===\n${rateConOcrText}\n`;
@@ -28,7 +33,7 @@ export async function runFreightAudit(ocrText: string, rateConOcrText?: string, 
     messages: [{ role: 'user', content: userContent }],
   });
 
-  const raw = response.content[0].type === 'text' ? response.content[0].text : '';
+  const raw = firstTextBlockText(response.content);
   return parseAuditResponse(raw);
 }
 
@@ -38,7 +43,7 @@ export async function parseRateConfirmation(ocrText: string) {
     system: [{ type: 'text', text: RATECON_PARSE_PROMPT, cache_control: { type: 'ephemeral' } }],
     messages: [{ role: 'user', content: `Parse this rate confirmation:\n\n${ocrText}` }],
   });
-  const raw = response.content[0].type === 'text' ? response.content[0].text : '{}';
+  const raw = firstTextBlockText(response.content, '{}');
   try { return JSON.parse(raw); } catch { return { error: 'Failed to parse', rawText: raw }; }
 }
 

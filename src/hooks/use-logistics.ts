@@ -4,6 +4,7 @@
 'use client';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { isSupabaseClientConfigured, supabase } from '@/lib/supabase';
+import { ensureSupabaseSession } from '@/lib/supabase-auth';
 import type { TripRow, InvoiceRow, InvoiceStatus } from '@/types';
 
 type InvoiceQueryRow = {
@@ -68,7 +69,7 @@ export function useInsertTrip() {
     }) => {
       if (!isSupabaseClientConfigured) throw new Error('Supabase is not configured');
 
-      const { data: { user } } = await supabase.auth.getUser();
+      const user = await ensureSupabaseSession();
       if (!user) throw new Error('Not authenticated');
       const { data, error } = await supabase
         .from('trips')
