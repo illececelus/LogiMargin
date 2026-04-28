@@ -47,14 +47,14 @@ export function DetentionTimer() {
   const [stopped, setStopped]           = useState(false);
   const [showEmail, setShowEmail]       = useState(false);
   const [saved, setSaved]               = useState(false);
+  const [hydrated, setHydrated]         = useState(false);
   const intervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
-  const hydratedRef = useRef(false);
 
   useEffect(() => {
     try {
       const raw = window.localStorage.getItem(DETENTION_STORAGE_KEY);
       if (!raw) {
-        hydratedRef.current = true;
+        setHydrated(true);
         return;
       }
 
@@ -81,12 +81,12 @@ export function DetentionTimer() {
     } catch {
       window.localStorage.removeItem(DETENTION_STORAGE_KEY);
     } finally {
-      hydratedRef.current = true;
+      setHydrated(true);
     }
   }, []);
 
   useEffect(() => {
-    if (!hydratedRef.current) return;
+    if (!hydrated) return;
     const payload: PersistedDetentionState = {
       facilityName,
       brokerName,
@@ -96,7 +96,7 @@ export function DetentionTimer() {
       stopped,
     };
     window.localStorage.setItem(DETENTION_STORAGE_KEY, JSON.stringify(payload));
-  }, [brokerName, entryTime, exitTime, facilityName, ratePerHour, stopped]);
+  }, [brokerName, entryTime, exitTime, facilityName, hydrated, ratePerHour, stopped]);
 
   useEffect(() => {
     if (entryTime && !stopped) {
