@@ -15,6 +15,25 @@ create table if not exists profiles (
   created_at  timestamptz not null default now()
 );
 
+create or replace function public.handle_new_user()
+returns trigger
+language plpgsql
+security definer
+set search_path = public
+as $$
+begin
+  insert into public.profiles (id)
+  values (new.id)
+  on conflict (id) do nothing;
+  return new;
+end;
+$$;
+
+drop trigger if exists on_auth_user_created on auth.users;
+create trigger on_auth_user_created
+after insert on auth.users
+for each row execute function public.handle_new_user();
+
 -- ── Trips ─────────────────────────────────────────────────────
 create table if not exists trips (
   id                  uuid primary key default uuid_generate_v4(),
@@ -112,6 +131,9 @@ create table if not exists detention_records (
   user_id            uuid references profiles(id) on delete cascade,
   facility_name      text,
   broker_name        text,
+  facility_address   text,
+  latitude           numeric(10,6),
+  longitude          numeric(10,6),
   entry_time         timestamptz,
   exit_time          timestamptz,
   detention_minutes  integer,
@@ -215,3 +237,16 @@ group by t.broker_name;
 insert into storage.buckets (id, name, public)
 values ('logistics_docs', 'logistics_docs', true)
 on conflict (id) do nothing;
+
+drop policy if exists "Authenticated users can upload logistics docs" on storage.objects;
+drop policy if exists "Public can read logistics docs" on storage.objects;
+
+create policy "Authenticated users can upload logistics docs"
+on storage.objects for insert
+to authenticated
+with check (bucket_id = 'logistics_docs' and auth.uid()::text = (storage.foldername(name))[1]);
+
+create policy "Public can read logistics docs"
+on storage.objects for select
+to public
+using (bucket_id = 'logistics_docs');

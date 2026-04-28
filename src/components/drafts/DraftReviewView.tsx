@@ -15,7 +15,7 @@ import { Card, CardContent } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { cn } from '@/lib/utils';
-import { supabase } from '@/lib/supabase';
+import { isSupabaseClientConfigured, supabase } from '@/lib/supabase';
 import type { BrokerRiskResult, EnrichedDraft } from '@/lib/logimargin-engine';
 
 // ── Magic Loading Messages ────────────────────────────────────
@@ -214,6 +214,10 @@ export function DraftReviewView({ draftId }: { draftId: string }) {
   useEffect(() => {
     async function load() {
       try {
+        if (!isSupabaseClientConfigured) {
+          throw new Error('Supabase is not configured. Configure Supabase to review uploaded drafts.');
+        }
+
         const { data: draft, error: err } = await supabase
           .from('load_drafts')
           .select('*')

@@ -3,6 +3,7 @@
 // ============================================================
 import { NextResponse } from 'next/server';
 import { createServerClient, isSupabaseServerConfigured } from '@/lib/supabase';
+import { getServerUser } from '@/lib/supabase-auth';
 
 export const runtime = 'nodejs';
 
@@ -23,6 +24,10 @@ export async function GET() {
     }
 
     const db = createServerClient();
+    const { user } = await getServerUser();
+    if (!user) {
+      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+    }
     const today = new Date().toISOString().split('T')[0]; // YYYY-MM-DD
 
     // Run all queries in parallel

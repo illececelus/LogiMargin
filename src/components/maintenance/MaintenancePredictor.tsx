@@ -14,6 +14,7 @@ import { cn, fmt } from '@/lib/utils';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { isSupabaseClientConfigured, supabase } from '@/lib/supabase';
 import { detectMaintenanceAlerts } from '@/lib/logimargin-engine';
+import { getLocalVehicleVitals, insertLocalVehicleVitals } from '@/lib/local-store';
 import type { VehicleVitals, MaintenanceAlert } from '@/types';
 
 type VehicleVitalsRow = {
@@ -78,7 +79,7 @@ export function MaintenancePredictor() {
   const { data: latestVitals } = useQuery<VehicleVitalsRow[]>({
     queryKey: ['vehicle-vitals-detail'],
     queryFn: async () => {
-      if (!isSupabaseClientConfigured) return [];
+      if (!isSupabaseClientConfigured) return getLocalVehicleVitals();
       const { data } = await supabase
         .from('vehicle_vitals')
         .select('*')
@@ -91,7 +92,18 @@ export function MaintenancePredictor() {
   // Save vitals mutation
   const saveVitals = useMutation({
     mutationFn: async () => {
-      if (!isSupabaseClientConfigured) throw new Error('Supabase is not configured');
+      if (!isSupabaseClientConfigured) {
+        insertLocalVehicleVitals({
+          current_odometer: form.currentOdometer,
+          engine_hours: form.engineHours,
+          last_oil_change_mi: form.lastOilChangeMi,
+          last_tire_rotate_mi: form.lastTireRotateMi,
+          last_injector_svc_mi: form.lastInjectorSvcMi,
+          last_def_fluid_mi: form.lastDefFluidMi,
+          baseline_cpm: form.baselineCpm,
+        });
+        return;
+      }
       const { data: { user } } = await supabase.auth.getUser();
       if (!user) throw new Error('Not authenticated');
       const { error } = await supabase.from('vehicle_vitals').insert({

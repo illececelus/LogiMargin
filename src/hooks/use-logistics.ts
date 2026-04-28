@@ -4,6 +4,7 @@
 'use client';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { isSupabaseClientConfigured, supabase } from '@/lib/supabase';
+import { getLocalInvoices, getLocalTrips, insertLocalTrip } from '@/lib/local-store';
 import type { TripRow, InvoiceRow, InvoiceStatus } from '@/types';
 
 type InvoiceQueryRow = {
@@ -29,15 +30,14 @@ export function useTrips() {
   return useQuery({
     queryKey: ['trips'],
     queryFn: async (): Promise<TripRow[]> => {
-      if (!isSupabaseClientConfigured) return [];
+      if (!isSupabaseClientConfigured) return getLocalTrips();
 
       const { data, error } = await supabase
         .from('trips')
         .select('id, origin, destination, gross_pay, net_profit, logimargin_score, verdict, action, status, pickup_date, broker_name')
         .order('created_at', { ascending: false })
         .limit(50);
-      if (error) throw new Error(error.message);
-      return (data ?? []).map(r => ({
+      const remoteTrips = !error ? (data ?? []).map(r => ({
         id: r.id,
         origin: r.origin,
         destination: r.destination,
@@ -49,7 +49,9 @@ export function useTrips() {
         status: r.status,
         pickupDate: r.pickup_date,
         brokerName: r.broker_name,
-      }));
+      })) : [];
+
+      return [...getLocalTrips(), ...remoteTrips].slice(0, 50);
     },
     staleTime: 30_000,
   });
@@ -66,10 +68,10 @@ export function useInsertTrip() {
       logimargin_score?: number; verdict?: string; action?: string;
       pickup_date?: string; delivery_date?: string; broker_name?: string; broker_rating?: string;
     }) => {
-      if (!isSupabaseClientConfigured) throw new Error('Supabase is not configured');
+      if (!isSupabaseClientConfigured) return insertLocalTrip(trip);
 
       const { data: { user } } = await supabase.auth.getUser();
-      if (!user) throw new Error('Not authenticated');
+      if (!user) throw new Error('Not authenticated. Please sign in to save this load.');
       const { data, error } = await supabase
         .from('trips')
         .insert({ ...trip, user_id: user.id })
@@ -87,7 +89,7 @@ export function useInvoices() {
   return useQuery({
     queryKey: ['invoices'],
     queryFn: async (): Promise<InvoiceRow[]> => {
-      if (!isSupabaseClientConfigured) return [];
+      if (!isSupabaseClientConfigured) return getLocalInvoices();
 
       const { data, error } = await supabase
         .from('invoices')

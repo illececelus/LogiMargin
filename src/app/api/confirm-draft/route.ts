@@ -3,7 +3,7 @@
 // Confirm draft → move to trips table → create load_document
 // ============================================================
 import { NextRequest, NextResponse } from 'next/server';
-import { createServerClient } from '@/lib/supabase';
+import { getAuthenticatedUser } from '@/lib/supabase-auth';
 
 export const runtime = 'nodejs';
 
@@ -32,11 +32,9 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: 'draftId required' }, { status: 400 });
     }
 
-    const db = createServerClient();
-
     // ── 1. Auth ───────────────────────────────────────────────
-    const { data: { user }, error: authErr } = await db.auth.getUser();
-    if (authErr || !user) {
+    const { supabase: db, user } = await getAuthenticatedUser();
+    if (!user) {
       return NextResponse.json({ error: 'Not authenticated' }, { status: 401 });
     }
 
@@ -105,7 +103,7 @@ export async function POST(req: NextRequest) {
     }
 
     // ── 5. Create load_document record ────────────────────────
-    await db.from('load_documents').insert({
+    const { error: documentErr } = await db.from('load_documents').insert({
       user_id: user.id,
       trip_id: trip.id,
       draft_id: draftId,
@@ -115,11 +113,23 @@ export async function POST(req: NextRequest) {
       metadata: ai,
     });
 
+    if (documentErr) {
+      await db.from('trips').delete().eq('id', trip.id).eq('user_id', user.id);
+      return NextResponse.json({ error: `Document insert failed: ${documentErr.message}` }, { status: 500 });
+    }
+
     // ── 6. Mark draft as confirmed ────────────────────────────
-    await db
+    const { error: updateErr } = await db
       .from('load_drafts')
       .update({ status: 'confirmed' })
-      .eq('id', draftId);
+      .eq('id', draftId)
+      .eq('user_id', user.id);
+
+    if (updateErr) {
+      await db.from('load_documents').delete().eq('trip_id', trip.id).eq('user_id', user.id);
+      await db.from('trips').delete().eq('id', trip.id).eq('user_id', user.id);
+      return NextResponse.json({ error: `Draft update failed: ${updateErr.message}` }, { status: 500 });
+    }
 
     return NextResponse.json({
       success: true,

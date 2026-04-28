@@ -3,9 +3,9 @@
 // PDF Vision → Real Profit → Broker Risk → Enriched Draft
 // ============================================================
 import { NextRequest, NextResponse } from 'next/server';
-import { createServerClient } from '@/lib/supabase';
+import { getAuthenticatedUser } from '@/lib/supabase-auth';
 import Anthropic from '@anthropic-ai/sdk';
-import type { ContentBlockParam } from '@anthropic-ai/sdk/resources/messages';
+import type { ContentBlockParam, Message } from '@anthropic-ai/sdk/resources/messages';
 import {
   AiParsedDocSchema,
   calcRealProfit,
@@ -17,6 +17,14 @@ export const runtime  = 'nodejs';
 export const maxDuration = 60;
 
 const anthropic = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY ?? '' });
+
+function firstTextContent(response: Message) {
+  return response.content.find(block => block.type === 'text')?.text ?? '{}';
+}
+
+function parseJsonContent(raw: string): Record<string, unknown> {
+  return JSON.parse(raw.replace(/```json\n?/g, '').replace(/```\n?/g, '').trim());
+}
 
 const SYSTEM_PROMPT = `You are an elite freight document parser for a trucking TMS (LogiMargin).
 Your job: extract ALL data from rate confirmations, BOLs, and freight receipts with maximum accuracy.
@@ -61,11 +69,9 @@ export async function POST(req: NextRequest) {
 
     if (!file) return NextResponse.json({ error: 'No file provided' }, { status: 400 });
 
-    const db = createServerClient();
-
     // ── 1. Auth ───────────────────────────────────────────────
-    const { data: { user }, error: authErr } = await db.auth.getUser();
-    if (authErr || !user) return NextResponse.json({ error: 'Not authenticated' }, { status: 401 });
+    const { supabase: db, user } = await getAuthenticatedUser();
+    if (!user) return NextResponse.json({ error: 'Not authenticated' }, { status: 401 });
 
     // ── 2. Upload to Supabase Storage ─────────────────────────
     const fileBuffer   = await file.arrayBuffer();
@@ -108,8 +114,7 @@ export async function POST(req: NextRequest) {
             ],
           }],
         });
-        const raw = response.content[0].type === 'text' ? response.content[0].text : '{}';
-        rawAiData = JSON.parse(raw.replace(/```json\n?/g, '').replace(/```\n?/g, '').trim());
+        rawAiData = parseJsonContent(firstTextContent(response));
       } else {
         const text = await file.text();
         const response = await anthropic.messages.create({
@@ -118,8 +123,7 @@ export async function POST(req: NextRequest) {
           system: [{ type: 'text', text: SYSTEM_PROMPT, cache_control: { type: 'ephemeral' } }],
           messages: [{ role: 'user', content: `Parse this ${docTypeHint}:\n\n${text.slice(0, 8000)}` }],
         });
-        const raw = response.content[0].type === 'text' ? response.content[0].text : '{}';
-        rawAiData = JSON.parse(raw.replace(/```json\n?/g, '').replace(/```\n?/g, '').trim());
+        rawAiData = parseJsonContent(firstTextContent(response));
       }
     } catch (e) {
       console.error('[upload-draft] AI parse error:', e);

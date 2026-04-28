@@ -4,6 +4,7 @@
 // ============================================================
 import { NextResponse } from 'next/server';
 import { createServerClient, isSupabaseServerConfigured } from '@/lib/supabase';
+import { getServerUser } from '@/lib/supabase-auth';
 
 export const runtime = 'nodejs';
 
@@ -36,6 +37,10 @@ interface BrokerScoreRow {
 function parseDbNumber(value: number | string | null): number {
   if (typeof value === 'number') return value;
   return parseFloat(value ?? '0');
+}
+
+function normalizeMarginPct(value: number): number {
+  return Math.abs(value) <= 1 ? value * 100 : value;
 }
 
 function calcGrade(avgMargin: number, avgDays: number | null, disputeRate: number): {
@@ -96,10 +101,9 @@ export async function GET() {
     }
 
     const db = createServerClient();
-
-    const { data: { user }, error: authErr } = await db.auth.getUser();
-    if (authErr || !user) {
-      return NextResponse.json([]);
+    const { user } = await getServerUser();
+    if (!user) {
+      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
 
     // broker_scores view'dan çek (user_id RLS otomatik filtreler)
@@ -135,7 +139,7 @@ export async function GET() {
       }
 
       const scores: BrokerScore[] = Array.from(brokerMap.entries()).map(([name, v]) => {
-        const avgMargin = v.totalLoads > 0 ? (v.totalMargin / v.totalLoads) * 100 : 0;
+        const avgMargin = v.totalLoads > 0 ? normalizeMarginPct(v.totalMargin / v.totalLoads) : 0;
         const { grade, gradeColor, recommendation, score } = calcGrade(avgMargin, null, 0);
         return {
           brokerName: name,
@@ -158,7 +162,7 @@ export async function GET() {
     const scores: BrokerScore[] = ((data ?? []) as BrokerScoreRow[]).map(row => {
       const invoiceCount = row.invoice_count ?? 0;
       const disputeCount = row.dispute_count ?? 0;
-      const avgMargin = parseDbNumber(row.avg_margin_pct);
+      const avgMargin = normalizeMarginPct(parseDbNumber(row.avg_margin_pct));
       const avgDays = row.avg_payment_days ? parseDbNumber(row.avg_payment_days) : null;
       const disputeRate = invoiceCount > 0 ? disputeCount / invoiceCount : 0;
       const { grade, gradeColor, recommendation, score } = calcGrade(avgMargin, avgDays, disputeRate);
