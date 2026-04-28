@@ -18,6 +18,11 @@ export const maxDuration = 60;
 
 const anthropic = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY ?? '' });
 
+function isAnthropicConfigured() {
+  const key = process.env.ANTHROPIC_API_KEY;
+  return Boolean(key && key.startsWith('sk-ant-') && !key.includes('placeholder'));
+}
+
 function firstTextContent(response: Message) {
   return response.content.find(block => block.type === 'text')?.text ?? '{}';
 }
@@ -72,6 +77,13 @@ export async function POST(req: NextRequest) {
     // ── 1. Auth ───────────────────────────────────────────────
     const { supabase: db, user } = await getAuthenticatedUser();
     if (!user) return NextResponse.json({ error: 'Not authenticated' }, { status: 401 });
+
+    if (!isAnthropicConfigured()) {
+      return NextResponse.json(
+        { error: 'AI document parsing is not configured. Set ANTHROPIC_API_KEY or enter load details manually.' },
+        { status: 503 }
+      );
+    }
 
     // ── 2. Upload to Supabase Storage ─────────────────────────
     const fileBuffer   = await file.arrayBuffer();

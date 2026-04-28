@@ -18,11 +18,23 @@ function isPublicPath(pathname: string) {
     || pathname.startsWith('/api/webhooks/');
 }
 
+function isProtectedAppPath(pathname: string) {
+  return [
+    '/loads',
+    '/drafts',
+    '/factoring',
+    '/brokers',
+    '/maintenance',
+    '/detention',
+    '/dashboard',
+  ].some(path => pathname === path || pathname.startsWith(`${path}/`));
+}
+
 export async function middleware(request: NextRequest) {
   const response = await updateSession(request);
   const { pathname } = request.nextUrl;
 
-  if (!isPublicPath(pathname) && (pathname.startsWith('/dashboard/') || pathname.startsWith('/api/'))) {
+  if (!isPublicPath(pathname) && (isProtectedAppPath(pathname) || pathname.startsWith('/api/'))) {
     const hasSupabaseSession = request.cookies.getAll().some(cookie => cookie.name.startsWith('sb-'));
     if (!hasSupabaseSession) {
       if (pathname.startsWith('/api/')) {

@@ -140,7 +140,7 @@ export function useUpdateInvoiceStatus() {
   const qc = useQueryClient();
   return useMutation({
     mutationFn: async ({ id, status }: { id: string; status: InvoiceStatus }) => {
-      if (!isSupabaseClientConfigured) throw new Error('Supabase is not configured');
+      if (!isSupabaseClientConfigured) throw new Error('Supabase is not configured. Invoice status changes require a database connection.');
 
       const supabase = createClient();
       const { data: { user } } = await supabase.auth.getUser();

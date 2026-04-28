@@ -6,6 +6,13 @@ export const maxDuration = 30;
 
 export async function POST(req: NextRequest) {
   try {
+    if (!process.env.ANTHROPIC_API_KEY || !process.env.ANTHROPIC_API_KEY.startsWith('sk-ant-')) {
+      return NextResponse.json(
+        { error: 'AI audit provider is not configured. Set ANTHROPIC_API_KEY to enable freight audit.' },
+        { status: 503 }
+      );
+    }
+
     const formData = await req.formData();
     const file = formData.get('file') as File | null;
     const mode = formData.get('mode') as string;

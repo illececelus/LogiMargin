@@ -165,7 +165,7 @@ export function DetentionTimer() {
 
       const supabase = createClient();
       const { data: { user } } = await supabase.auth.getUser();
-      if (!user) throw new Error('Not authenticated');
+      if (!user) throw new Error('Detention kaydını veritabanına yazmak için giriş yapmalısın.');
       const { error } = await supabase.from('detention_records').insert({
         user_id: user.id,
         ...payload,

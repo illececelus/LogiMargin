@@ -108,7 +108,7 @@ export function MaintenancePredictor() {
       }
       const supabase = createClient();
       const { data: { user } } = await supabase.auth.getUser();
-      if (!user) throw new Error('Not authenticated');
+      if (!user) throw new Error('Bakım kaydı oluşturmak için giriş yapmalısın.');
       const { error } = await supabase.from('vehicle_vitals').insert({
         user_id: user.id,
         current_odometer: form.currentOdometer,

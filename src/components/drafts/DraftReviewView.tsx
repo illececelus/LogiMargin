@@ -15,7 +15,8 @@ import { Card, CardContent } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { cn } from '@/lib/utils';
-import { isSupabaseClientConfigured, supabase } from '@/lib/supabase';
+import { isSupabaseClientConfigured } from '@/lib/supabase';
+import { createClient } from '@/utils/supabase/client';
 import type { BrokerRiskResult, EnrichedDraft } from '@/lib/logimargin-engine';
 
 // ── Magic Loading Messages ────────────────────────────────────
@@ -218,10 +219,15 @@ export function DraftReviewView({ draftId }: { draftId: string }) {
           throw new Error('Supabase is not configured. Configure Supabase to review uploaded drafts.');
         }
 
+        const supabase = createClient();
+        const { data: { user } } = await supabase.auth.getUser();
+        if (!user) throw new Error('Please sign in to review uploaded drafts.');
+
         const { data: draft, error: err } = await supabase
           .from('load_drafts')
           .select('*')
           .eq('id', draftId)
+          .eq('user_id', user.id)
           .single();
         if (err || !draft) throw new Error(err?.message ?? 'Draft not found');
         setData(draft.raw_ai_data as EnrichedDraft);
@@ -229,8 +235,7 @@ export function DraftReviewView({ draftId }: { draftId: string }) {
       } catch (e) {
         setError(e instanceof Error ? e.message : 'Failed to load draft');
       } finally {
-        // Show magic loader for at least 3s for UX delight
-        setTimeout(() => setLoading(false), 3000);
+        setLoading(false);
       }
     }
     load();

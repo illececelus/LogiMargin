@@ -52,6 +52,7 @@ export function BrokerScorecard() {
     queryKey: ['broker-scores'],
     queryFn: async () => {
       const res = await fetch('/api/broker-scores');
+      if (res.status === 401) throw new Error('Please sign in to view broker scores.');
       if (!res.ok) throw new Error('Failed to load broker scores');
       return res.json();
     },

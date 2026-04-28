@@ -2,7 +2,13 @@ import Anthropic from '@anthropic-ai/sdk';
 import type { Message } from '@anthropic-ai/sdk/resources/messages';
 import type { FreightAuditResult, AuditError } from '@/types';
 
-const client = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY });
+function getAnthropicClient() {
+  const apiKey = process.env.ANTHROPIC_API_KEY;
+  if (!apiKey || apiKey.includes('placeholder') || !apiKey.startsWith('sk-ant-')) {
+    throw new Error('Anthropic API key is not configured. AI audit features are disabled.');
+  }
+  return new Anthropic({ apiKey });
+}
 
 const FREIGHT_AUDIT_SYSTEM_PROMPT = `You are LogiMargin's Freight Audit AI. Audit OCR text from freight documents and identify billing errors.
 Detect: rate discrepancies, mileage errors, unauthorized fees, fuel surcharge miscalculations, duplicate line items.
@@ -27,7 +33,7 @@ export async function runFreightAudit(ocrText: string, rateConOcrText?: string, 
   if (expectedAmount !== undefined) userContent += `\n=== EXPECTED AMOUNT ===\n$${expectedAmount.toFixed(2)}\n`;
   userContent += `\nReturn ONLY the JSON audit result.`;
 
-  const response = await client.messages.create({
+  const response = await getAnthropicClient().messages.create({
     model: 'claude-sonnet-4-6', max_tokens: 1024,
     system: [{ type: 'text', text: FREIGHT_AUDIT_SYSTEM_PROMPT, cache_control: { type: 'ephemeral' } }],
     messages: [{ role: 'user', content: userContent }],
@@ -38,7 +44,7 @@ export async function runFreightAudit(ocrText: string, rateConOcrText?: string, 
 }
 
 export async function parseRateConfirmation(ocrText: string) {
-  const response = await client.messages.create({
+  const response = await getAnthropicClient().messages.create({
     model: 'claude-sonnet-4-6', max_tokens: 1024,
     system: [{ type: 'text', text: RATECON_PARSE_PROMPT, cache_control: { type: 'ephemeral' } }],
     messages: [{ role: 'user', content: `Parse this rate confirmation:\n\n${ocrText}` }],
