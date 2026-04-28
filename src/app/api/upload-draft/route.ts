@@ -3,7 +3,6 @@
 // PDF Vision → Real Profit → Broker Risk → Enriched Draft
 // ============================================================
 import { NextRequest, NextResponse } from 'next/server';
-import { createServerClient } from '@/lib/supabase';
 import { getAuthenticatedUser } from '@/lib/supabase-auth';
 import Anthropic from '@anthropic-ai/sdk';
 import type { ContentBlockParam, Message } from '@anthropic-ai/sdk/resources/messages';
@@ -70,10 +69,8 @@ export async function POST(req: NextRequest) {
 
     if (!file) return NextResponse.json({ error: 'No file provided' }, { status: 400 });
 
-    const db = createServerClient();
-
     // ── 1. Auth ───────────────────────────────────────────────
-    const user = await getAuthenticatedUser(db, req);
+    const { supabase: db, user } = await getAuthenticatedUser();
     if (!user) return NextResponse.json({ error: 'Not authenticated' }, { status: 401 });
 
     // ── 2. Upload to Supabase Storage ─────────────────────────

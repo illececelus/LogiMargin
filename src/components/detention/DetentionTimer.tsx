@@ -14,7 +14,6 @@ import { Separator } from '@/components/ui/separator';
 import { cn, fmt } from '@/lib/utils';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { isSupabaseClientConfigured, supabase } from '@/lib/supabase';
-import { getCurrentSupabaseUser } from '@/lib/supabase-auth';
 import { getLocalDetentionRecords, insertLocalDetentionRecord, type LocalDetentionRecord } from '@/lib/local-store';
 import { calcDetention } from '@/lib/logimargin-engine';
 import type { DetentionResult } from '@/types';
@@ -162,7 +161,8 @@ export function DetentionTimer() {
         return;
       }
 
-      const user = await getCurrentSupabaseUser();
+      const { data: { user } } = await supabase.auth.getUser();
+      if (!user) throw new Error('Not authenticated');
       const { error } = await supabase.from('detention_records').insert({
         user_id: user.id,
         ...payload,

@@ -8,7 +8,6 @@ import { usePathname, useRouter } from 'next/navigation';
 import { useRef } from 'react';
 import { LayoutDashboard, Truck, DollarSign, Wrench, Timer, Star, Plus } from 'lucide-react';
 import { cn } from '@/lib/utils';
-import { authFetch } from '@/lib/supabase-auth';
 
 const NAV = [
   { href: '/',            label: 'Dashboard',  Icon: LayoutDashboard },
@@ -31,7 +30,7 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
     form.append('file', file);
     form.append('docType', 'ratecon');
     try {
-      const res  = await authFetch('/api/upload-draft', { method: 'POST', body: form });
+      const res  = await fetch('/api/upload-draft', { method: 'POST', body: form });
       const json = await res.json();
       if (!res.ok) {
         throw new Error(json.error ?? 'Upload failed. Try again.');

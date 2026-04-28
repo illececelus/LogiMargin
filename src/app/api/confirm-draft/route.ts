@@ -3,7 +3,6 @@
 // Confirm draft → move to trips table → create load_document
 // ============================================================
 import { NextRequest, NextResponse } from 'next/server';
-import { createServerClient } from '@/lib/supabase';
 import { getAuthenticatedUser } from '@/lib/supabase-auth';
 
 export const runtime = 'nodejs';
@@ -33,10 +32,8 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: 'draftId required' }, { status: 400 });
     }
 
-    const db = createServerClient();
-
     // ── 1. Auth ───────────────────────────────────────────────
-    const user = await getAuthenticatedUser(db, req);
+    const { supabase: db, user } = await getAuthenticatedUser();
     if (!user) {
       return NextResponse.json({ error: 'Not authenticated' }, { status: 401 });
     }

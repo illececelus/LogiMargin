@@ -16,7 +16,6 @@ import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { cn } from '@/lib/utils';
 import { isSupabaseClientConfigured, supabase } from '@/lib/supabase';
-import { getSupabaseAccessToken } from '@/lib/supabase-auth';
 import type { BrokerRiskResult, EnrichedDraft } from '@/lib/logimargin-engine';
 
 // ── Magic Loading Messages ────────────────────────────────────
@@ -241,13 +240,9 @@ export function DraftReviewView({ draftId }: { draftId: string }) {
     if (!data) return;
     setConfirming(true);
     try {
-      const token = await getSupabaseAccessToken();
       const res = await fetch('/api/confirm-draft', {
         method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          ...(token ? { Authorization: `Bearer ${token}` } : {}),
-        },
+        headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ draftId }),
       });
       const json = await res.json();

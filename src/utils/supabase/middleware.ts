@@ -37,9 +37,8 @@ export const createClient = (request: NextRequest) => {
 
 export async function updateSession(request: NextRequest) {
   const { supabase, response } = createClient(request);
+  // Refresh the auth session cookie when Supabase has one to rotate.
+  const { data } = await supabase.auth.getUser();
 
-  // Refreshes the auth session cookie when Supabase has one to rotate.
-  await supabase.auth.getUser();
-
-  return response;
+  return { response, user: data.user };
 }

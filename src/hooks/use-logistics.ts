@@ -4,7 +4,6 @@
 'use client';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { isSupabaseClientConfigured, supabase } from '@/lib/supabase';
-import { ensureSupabaseSession } from '@/lib/supabase-auth';
 import { getLocalInvoices, getLocalTrips, insertLocalTrip } from '@/lib/local-store';
 import type { TripRow, InvoiceRow, InvoiceStatus } from '@/types';
 
@@ -71,8 +70,8 @@ export function useInsertTrip() {
     }) => {
       if (!isSupabaseClientConfigured) return insertLocalTrip(trip);
 
-      const user = await ensureSupabaseSession();
-      if (!user) throw new Error('Not authenticated');
+      const { data: { user } } = await supabase.auth.getUser();
+      if (!user) throw new Error('Not authenticated. Please sign in to save this load.');
       const { data, error } = await supabase
         .from('trips')
         .insert({ ...trip, user_id: user.id })

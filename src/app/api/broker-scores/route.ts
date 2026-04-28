@@ -4,7 +4,7 @@
 // ============================================================
 import { NextResponse } from 'next/server';
 import { createServerClient, isSupabaseServerConfigured } from '@/lib/supabase';
-import { getBearerUser } from '@/lib/supabase-auth';
+import { getServerUser } from '@/lib/supabase-auth';
 
 export const runtime = 'nodejs';
 
@@ -94,16 +94,16 @@ function calcGrade(avgMargin: number, avgDays: number | null, disputeRate: numbe
   return { grade, gradeColor, recommendation, score };
 }
 
-export async function GET(req: Request) {
+export async function GET() {
   try {
     if (!isSupabaseServerConfigured()) {
       return NextResponse.json([]);
     }
 
     const db = createServerClient();
-    const user = await getBearerUser(db, req);
+    const { user } = await getServerUser();
     if (!user) {
-      return NextResponse.json([]);
+      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
 
     // broker_scores view'dan çek (user_id RLS otomatik filtreler)

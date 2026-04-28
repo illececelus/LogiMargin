@@ -13,7 +13,6 @@ import { Separator } from '@/components/ui/separator';
 import { cn, fmt } from '@/lib/utils';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { isSupabaseClientConfigured, supabase } from '@/lib/supabase';
-import { getCurrentSupabaseUser } from '@/lib/supabase-auth';
 import { detectMaintenanceAlerts } from '@/lib/logimargin-engine';
 import { getLocalVehicleVitals, insertLocalVehicleVitals } from '@/lib/local-store';
 import type { VehicleVitals, MaintenanceAlert } from '@/types';
@@ -105,7 +104,8 @@ export function MaintenancePredictor() {
         });
         return;
       }
-      const user = await getCurrentSupabaseUser();
+      const { data: { user } } = await supabase.auth.getUser();
+      if (!user) throw new Error('Not authenticated');
       const { error } = await supabase.from('vehicle_vitals').insert({
         user_id: user.id,
         current_odometer: form.currentOdometer,

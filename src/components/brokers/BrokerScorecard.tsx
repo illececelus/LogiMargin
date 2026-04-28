@@ -11,7 +11,6 @@ import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Separator } from '@/components/ui/separator';
 import { cn, fmt } from '@/lib/utils';
-import { authFetch } from '@/lib/supabase-auth';
 import type { BrokerScore } from '@/app/api/broker-scores/route';
 
 type Grade = 'A' | 'B' | 'C' | 'D';
@@ -52,7 +51,7 @@ export function BrokerScorecard() {
   const { data: brokers, isLoading, error, refetch } = useQuery<BrokerScore[]>({
     queryKey: ['broker-scores'],
     queryFn: async () => {
-      const res = await authFetch('/api/broker-scores');
+      const res = await fetch('/api/broker-scores');
       if (!res.ok) throw new Error('Failed to load broker scores');
       return res.json();
     },

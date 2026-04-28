@@ -14,11 +14,10 @@ import { Separator } from '@/components/ui/separator';
 import { cn, fmt } from '@/lib/utils';
 import { useTrips } from '@/hooks/use-logistics';
 import { getLocalInvoices, getLocalVehicleVitals } from '@/lib/local-store';
-import { authHeaders } from '@/lib/supabase-auth';
 import type { DashboardKPIs, Verdict } from '@/types';
 
 async function fetchKPIs(): Promise<DashboardKPIs> {
-  const res = await fetch('/api/fleet-metrics', { headers: await authHeaders() });
+  const res = await fetch('/api/fleet-metrics');
   if (!res.ok) throw new Error('Failed to fetch KPIs');
   return res.json();
 }
