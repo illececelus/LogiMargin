@@ -31,7 +31,10 @@ const config: Config = {
         md: 'calc(var(--radius) - 2px)',
         sm: 'calc(var(--radius) - 4px)',
       },
-      fontFamily: { mono: ['JetBrains Mono', 'Fira Code', 'monospace'] },
+      fontFamily: {
+        sans: ['var(--font-geist-sans)', 'Inter', 'ui-sans-serif', 'system-ui', 'sans-serif'],
+        mono: ['var(--font-geist-mono)', 'JetBrains Mono', 'Fira Code', 'ui-monospace', 'SFMono-Regular', 'monospace'],
+      },
       keyframes: {
         'slide-up': { from: { transform: 'translateY(8px)', opacity: '0' }, to: { transform: 'translateY(0)', opacity: '1' } },
         'pulse-slow': { '0%, 100%': { opacity: '1' }, '50%': { opacity: '0.5' } },

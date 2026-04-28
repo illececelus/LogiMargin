@@ -24,18 +24,79 @@ type DetentionHistoryRow = {
   billable_minutes: number | null;
 };
 
+type PersistedDetentionState = {
+  facilityName: string;
+  brokerName: string;
+  ratePerHour: number;
+  entryTimeIso: string | null;
+  exitTimeIso: string | null;
+  stopped: boolean;
+};
+
+const DETENTION_STORAGE_KEY = 'logimargin:detention-timer:v1';
+
 export function DetentionTimer() {
   const qc = useQueryClient();
   const [facilityName, setFacilityName] = useState('');
   const [brokerName, setBrokerName]     = useState('');
   const [ratePerHour, setRatePerHour]   = useState(50);
   const [entryTime, setEntryTime]       = useState<Date | null>(null);
+  const [exitTime, setExitTime]         = useState<Date | null>(null);
   const [now, setNow]                   = useState(new Date());
   const [result, setResult]             = useState<DetentionResult | null>(null);
   const [stopped, setStopped]           = useState(false);
   const [showEmail, setShowEmail]       = useState(false);
   const [saved, setSaved]               = useState(false);
   const intervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
+  const hydratedRef = useRef(false);
+
+  useEffect(() => {
+    try {
+      const raw = window.localStorage.getItem(DETENTION_STORAGE_KEY);
+      if (!raw) {
+        hydratedRef.current = true;
+        return;
+      }
+
+      const parsed = JSON.parse(raw) as PersistedDetentionState;
+      const hydratedEntry = parsed.entryTimeIso ? new Date(parsed.entryTimeIso) : null;
+      const hydratedExit = parsed.exitTimeIso ? new Date(parsed.exitTimeIso) : null;
+
+      setFacilityName(parsed.facilityName ?? '');
+      setBrokerName(parsed.brokerName ?? '');
+      setRatePerHour(Number.isFinite(parsed.ratePerHour) ? parsed.ratePerHour : 50);
+      setEntryTime(hydratedEntry);
+      setExitTime(hydratedExit);
+      setStopped(parsed.stopped);
+      setNow(parsed.stopped && hydratedExit ? hydratedExit : new Date());
+
+      if (parsed.stopped && hydratedEntry && hydratedExit) {
+        setResult(calcDetention({
+          entryTimestamp: hydratedEntry,
+          exitTimestamp: hydratedExit,
+          facilityName: parsed.facilityName || undefined,
+          detentionRatePerHour: parsed.ratePerHour,
+        }));
+      }
+    } catch {
+      window.localStorage.removeItem(DETENTION_STORAGE_KEY);
+    } finally {
+      hydratedRef.current = true;
+    }
+  }, []);
+
+  useEffect(() => {
+    if (!hydratedRef.current) return;
+    const payload: PersistedDetentionState = {
+      facilityName,
+      brokerName,
+      ratePerHour,
+      entryTimeIso: entryTime?.toISOString() ?? null,
+      exitTimeIso: exitTime?.toISOString() ?? null,
+      stopped,
+    };
+    window.localStorage.setItem(DETENTION_STORAGE_KEY, JSON.stringify(payload));
+  }, [brokerName, entryTime, exitTime, facilityName, ratePerHour, stopped]);
 
   useEffect(() => {
     if (entryTime && !stopped) {
@@ -88,18 +149,40 @@ export function DetentionTimer() {
   });
 
   function startTimer() {
-    setStopped(false); setResult(null); setSaved(false); setShowEmail(false);
-    setEntryTime(new Date()); setNow(new Date());
+    const startedAt = new Date();
+    setStopped(false);
+    setResult(null);
+    setSaved(false);
+    setShowEmail(false);
+    setExitTime(null);
+    setEntryTime(startedAt);
+    setNow(startedAt);
   }
 
   function stopTimer() {
     if (!entryTime) return;
+    const stoppedAt = new Date();
     setStopped(true);
+    setExitTime(stoppedAt);
+    setNow(stoppedAt);
     if (intervalRef.current) clearInterval(intervalRef.current);
     setResult(calcDetention({
-      entryTimestamp: entryTime, exitTimestamp: new Date(),
+      entryTimestamp: entryTime, exitTimestamp: stoppedAt,
       facilityName: facilityName || undefined, detentionRatePerHour: ratePerHour,
     }));
+  }
+
+  function resetTimer() {
+    setFacilityName('');
+    setBrokerName('');
+    setRatePerHour(50);
+    setEntryTime(null);
+    setExitTime(null);
+    setResult(null);
+    setStopped(false);
+    setShowEmail(false);
+    setSaved(false);
+    window.localStorage.removeItem(DETENTION_STORAGE_KEY);
   }
 
   const liveResult = entryTime && !stopped
@@ -107,7 +190,8 @@ export function DetentionTimer() {
     : null;
   const display = result ?? liveResult;
 
-  const elapsed = entryTime ? Math.floor((now.getTime() - entryTime.getTime()) / 1000) : 0;
+  const elapsedUntil = stopped && exitTime ? exitTime : now;
+  const elapsed = entryTime ? Math.floor((elapsedUntil.getTime() - entryTime.getTime()) / 1000) : 0;
   const hh = Math.floor(elapsed / 3600).toString().padStart(2, '0');
   const mm = Math.floor((elapsed % 3600) / 60).toString().padStart(2, '0');
   const ss = (elapsed % 60).toString().padStart(2, '0');
@@ -135,88 +219,118 @@ Saygılarımızla` : '';
 
   return (
     <div className="space-y-6 animate-slide-up">
-      <div>
-        <h1 className="text-xl font-bold flex items-center gap-2">
-          <Timer className="h-5 w-5 text-primary" /> Detention Kronometre
-        </h1>
-        <p className="text-sm text-muted-foreground mt-0.5">
-          Tesis bekleme süresini takip et. 2 saat sonra otomatik talep belgesi oluştur.
-        </p>
+      <div className="flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between">
+        <div>
+          <p className="text-xs font-semibold uppercase tracking-[0.35em] text-emerald-300/80">Detention Control</p>
+          <h1 className="mt-2 flex items-center gap-2 text-3xl font-black tracking-tight text-slate-50">
+            <Timer className="h-6 w-6 text-emerald-300" /> Detention Timer
+          </h1>
+          <p className="mt-2 max-w-2xl text-sm text-slate-400">
+            Tesis bekleme süresini takip et; aktif timer yenilemede localStorage ile devam eder.
+          </p>
+        </div>
+        {entryTime && (
+          <Badge variant={stopped ? 'warning' : 'profit'} className="w-fit font-mono">
+            <span className={cn('h-1.5 w-1.5 rounded-full', stopped ? 'bg-warning' : 'bg-emerald-400 animate-pulse')} />
+            {stopped ? 'STOPPED' : 'RUNNING'}
+          </Badge>
+        )}
       </div>
 
-      {/* Setup Card */}
-      <Card>
-        <CardContent className="pt-5 space-y-4">
-          <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
-            <div className="space-y-1.5">
-              <Label htmlFor="facility">Tesis Adı</Label>
-              <Input id="facility" value={facilityName}
-                onChange={e => setFacilityName(e.target.value)}
-                placeholder="ör. Walmart DC Laredo"
-                disabled={!!entryTime && !stopped}
-              />
+      <div className="grid gap-4 lg:grid-cols-12">
+        {/* Setup Card */}
+        <Card className="lg:col-span-5 bg-white/[0.04] backdrop-blur-md">
+          <CardHeader>
+            <CardTitle className="text-sm">Bekleme Kaydı</CardTitle>
+          </CardHeader>
+          <CardContent className="space-y-4">
+            <div className="grid grid-cols-1 gap-4">
+              <div className="space-y-1.5">
+                <Label htmlFor="facility">Tesis Adı</Label>
+                <Input id="facility" value={facilityName}
+                  onChange={e => setFacilityName(e.target.value)}
+                  placeholder="ör. Walmart DC Laredo"
+                  disabled={!!entryTime && !stopped}
+                />
+              </div>
+              <div className="space-y-1.5">
+                <Label htmlFor="broker">Broker Adı</Label>
+                <Input id="broker" value={brokerName}
+                  onChange={e => setBrokerName(e.target.value)}
+                  placeholder="ör. Coyote Logistics"
+                  disabled={!!entryTime && !stopped}
+                />
+              </div>
+              <div className="space-y-1.5">
+                <Label htmlFor="rate">Detention Ücreti ($/saat)</Label>
+                <Input id="rate" type="number" value={ratePerHour}
+                  onChange={e => setRatePerHour(Number(e.target.value))}
+                  className="font-mono" disabled={!!entryTime && !stopped}
+                />
+              </div>
             </div>
-            <div className="space-y-1.5">
-              <Label htmlFor="broker">Broker Adı</Label>
-              <Input id="broker" value={brokerName}
-                onChange={e => setBrokerName(e.target.value)}
-                placeholder="ör. Coyote Logistics"
-                disabled={!!entryTime && !stopped}
-              />
+            <div className="flex flex-col gap-2 sm:flex-row">
+              {!entryTime || stopped ? (
+                <Button onClick={startTimer} className="flex-1 bg-emerald-400 text-slate-950 hover:bg-emerald-300">
+                  <Play className="h-4 w-4 mr-2" />
+                  {stopped ? 'Yeni Timer Başlat' : 'Timer Başlat'}
+                </Button>
+              ) : (
+                <Button onClick={stopTimer} variant="destructive" className="flex-1">
+                  <Square className="h-4 w-4 mr-2" /> Durdur & Talep Oluştur
+                </Button>
+              )}
+              {entryTime && (
+                <Button onClick={resetTimer} variant="outline" className="flex-1 border-white/10 bg-slate-950/50">
+                  Kaydı Sıfırla
+                </Button>
+              )}
             </div>
-            <div className="space-y-1.5">
-              <Label htmlFor="rate">Detention Ücreti ($/saat)</Label>
-              <Input id="rate" type="number" value={ratePerHour}
-                onChange={e => setRatePerHour(Number(e.target.value))}
-                className="font-mono" disabled={!!entryTime && !stopped}
-              />
-            </div>
-          </div>
-          <div className="flex gap-3">
-            {!entryTime || stopped ? (
-              <Button onClick={startTimer} className="flex-1">
-                <Play className="h-4 w-4 mr-2" />
-                {stopped ? 'Yeni Timer Başlat' : 'Timer Başlat'}
-              </Button>
-            ) : (
-              <Button onClick={stopTimer} variant="destructive" className="flex-1">
-                <Square className="h-4 w-4 mr-2" /> Durdur & Talep Oluştur
-              </Button>
-            )}
-          </div>
-        </CardContent>
-      </Card>
+          </CardContent>
+        </Card>
 
-      {/* Live Timer */}
-      {entryTime && (
-        <Card className={cn('border-2 transition-colors', isBillable ? 'border-danger/60' : 'border-border')}>
-          <CardContent className="pt-6 pb-6 text-center space-y-3">
-            <p className="text-xs font-semibold uppercase tracking-widest text-muted-foreground">Geçen Süre</p>
-            <p className={cn('font-mono text-5xl font-bold tracking-tight tabular-nums',
-              isBillable ? 'text-danger' : 'text-foreground'
-            )}>
-              {hh}:{mm}:{ss}
-            </p>
-            {isBillable ? (
-              <Badge variant="danger">
-                FATURALANAB İLİR — {display?.billableMinutes} dk ücretsiz süre aşıldı
-              </Badge>
+        {/* Live Timer */}
+        <Card className={cn('lg:col-span-7 bg-slate-950/70 transition-colors', isBillable ? 'border-danger/60' : 'border-emerald-400/20')}>
+          <CardContent className="flex min-h-80 flex-col items-center justify-center space-y-4 py-8 text-center">
+            {entryTime ? (
+              <>
+                <p className="text-xs font-semibold uppercase tracking-[0.28em] text-slate-400">Geçen Süre</p>
+                <p className={cn('font-mono text-6xl font-black tracking-tight tabular-nums sm:text-7xl',
+                  isBillable ? 'text-danger' : 'text-slate-50'
+                )}>
+                  {hh}:{mm}:{ss}
+                </p>
+                {isBillable ? (
+                  <Badge variant="danger">
+                    FATURALANABILIR - {display?.billableMinutes} dk ücretsiz süre aşıldı
+                  </Badge>
+                ) : (
+                  <Badge variant="muted" className="bg-white/5 text-slate-300">
+                    <Clock className="h-3 w-3 mr-1" />
+                    Ücretsiz süreden {Math.max(0, 120 - (display?.detentionMinutes ?? 0))} dk kaldı
+                  </Badge>
+                )}
+                {display && display.billableAmount > 0 && (
+                  <p className="font-mono text-2xl font-bold text-danger">{fmt.currency(display.billableAmount)} talep edilecek</p>
+                )}
+              </>
             ) : (
-              <Badge variant="muted">
-                <Clock className="h-3 w-3 mr-1" />
-                Ücretsiz süreden {Math.max(0, 120 - (display?.detentionMinutes ?? 0))} dk kaldı
-              </Badge>
-            )}
-            {display && display.billableAmount > 0 && (
-              <p className="font-mono text-2xl font-bold text-danger">{fmt.currency(display.billableAmount)} talep edilecek</p>
+              <>
+                <div className="rounded-full border border-emerald-400/20 bg-emerald-400/10 p-4">
+                  <Timer className="h-8 w-8 text-emerald-300" />
+                </div>
+                <div>
+                  <p className="font-semibold text-slate-100">Timer hazır</p>
+                  <p className="mt-1 text-sm text-slate-400">Tesis ve broker bilgisini girip beklemeyi başlat.</p>
+                </div>
+              </>
             )}
           </CardContent>
         </Card>
-      )}
 
       {/* Claim + Email */}
       {result?.claimData && (
-        <Card className="border-profit/30">
+        <Card className="lg:col-span-12 border-profit/30 bg-white/[0.04] backdrop-blur-md">
           <CardHeader>
             <CardTitle className="text-sm flex items-center justify-between text-profit">
               <span className="flex items-center gap-2">
@@ -298,7 +412,7 @@ Saygılarımızla` : '';
 
       {/* History */}
       {history && history.length > 0 && (
-        <Card>
+        <Card className="lg:col-span-6 bg-white/[0.04] backdrop-blur-md">
           <CardHeader>
             <CardTitle className="text-sm flex items-center gap-2">
               <History className="h-4 w-4 text-muted-foreground" /> Detention Geçmişi
@@ -336,7 +450,7 @@ Saygılarımızla` : '';
           .slice(0, 3);
         if (sorted.length === 0) return null;
         return (
-          <Card className="border-danger/20">
+          <Card className="lg:col-span-6 border-danger/20 bg-white/[0.04] backdrop-blur-md">
             <CardHeader>
               <CardTitle className="text-sm flex items-center gap-2 text-danger">
                 <AlertTriangle className="h-4 w-4" /> En Çok Bekleyen Tesisler
@@ -357,6 +471,7 @@ Saygılarımızla` : '';
           </Card>
         );
       })()}
+      </div>
     </div>
   );
 }
